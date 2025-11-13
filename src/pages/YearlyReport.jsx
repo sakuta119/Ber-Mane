@@ -540,39 +540,37 @@ const YearlyReport = () => {
           : <span className="text-sm text-muted">-</span>
       },
       {
-        label: '売上合計',
+        label: '売上合計額',
         value: (
-          <span className="flex flex-col items-end gap-1 text-right">
+          <div className="flex flex-col items-end text-right gap-1">
             <ValueWithUnit value={summary.totalSales} unit="円" />
-            <span className="inline-flex items-baseline gap-1 text-xs text-muted">
+            <div className="flex items-center gap-1 text-xs text-muted">
               <span>内クレカ決済</span>
               <ValueWithUnit
                 value={summary.totalCredit}
                 unit="円"
                 valueClassName="text-xs text-muted font-medium"
                 unitClassName="text-[10px] text-muted"
-                className="text-xs text-muted"
               />
-            </span>
-          </span>
+            </div>
+          </div>
         )
       },
       {
-        label: '支出合計',
+        label: '支出合計額',
         value: (
-          <span className="flex flex-col items-end gap-1 text-right">
+          <div className="flex flex-col items-end text-right gap-1">
             <ValueWithUnit value={summary.totalExpense + summary.totalSalary} unit="円" />
-            <span className="inline-flex items-baseline gap-1 text-xs text-muted">
+            <div className="flex items-center gap-1 text-xs text-muted">
               <span>内人件費額</span>
               <ValueWithUnit
                 value={summary.totalSalary}
                 unit="円"
                 valueClassName="text-xs text-muted font-medium"
                 unitClassName="text-[10px] text-muted"
-                className="text-xs text-muted"
               />
-            </span>
-          </span>
+            </div>
+          </div>
         )
       },
       {

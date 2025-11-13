@@ -60,7 +60,7 @@ const Login = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-3 py-2 rounded-md border border-default focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-surface-alt text-primary transition-colors"
-              placeholder="example@example.com"
+              placeholder="メールアドレスを入力"
               required
             />
           </div>

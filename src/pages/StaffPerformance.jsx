@@ -293,12 +293,18 @@ const StaffPerformance = () => {
             <SummaryItem
               label="売上額"
               value={
-                <span className="flex flex-col items-end leading-tight text-right gap-0.5">
+                <div className="flex flex-col items-end text-right gap-1">
                   <ValueWithUnit value={summary.totalSales} unit="円" />
-                  <span className="text-xs text-muted">
-                    （内クレカ決済{summary.totalCredit.toLocaleString()}円）
-                  </span>
-                </span>
+                  <div className="flex items-center gap-1 text-xs text-muted">
+                    <span>内クレカ決済</span>
+                    <ValueWithUnit
+                      value={summary.totalCredit}
+                      unit="円"
+                      valueClassName="text-xs text-muted font-medium"
+                      unitClassName="text-[10px] text-muted"
+                    />
+                  </div>
+                </div>
               }
             />
             <SummaryItem
