@@ -96,7 +96,7 @@ const DailyReport = () => {
         .select('*')
         .eq('date', selectedDate)
         .eq('store_id', selectedStore)
-        .single()
+        .maybeSingle()
 
       if (error && error.code !== 'PGRST116') {
         console.error('Error loading daily report:', error)
@@ -189,7 +189,7 @@ const DailyReport = () => {
         .eq('staff_id', staffId)
         .eq('date', selectedDate)
         .eq('store_id', selectedStore)
-        .single()
+        .maybeSingle()
 
       if (!error && data) {
         // スタッフのデータが存在する場合は、入力フィールドに反映
@@ -318,7 +318,7 @@ const DailyReport = () => {
           onConflict: 'date,store_id'
         })
         .select()
-        .single()
+        .maybeSingle()
 
       if (reportError) {
         throw reportError
@@ -641,7 +641,7 @@ const DailyReport = () => {
               .select('*')
               .eq('date', selectedDate)
               .eq('store_id', selectedStore)
-              .single()
+              .maybeSingle()
 
             if (reportData) {
               await supabase
