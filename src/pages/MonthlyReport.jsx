@@ -531,25 +531,41 @@ const MonthlyReport = () => {
   const totalExpenseAmount = fixedExpenseTotal + manualExpenseTotal + dailyExpenseTotal
 
   const summaryItems = useMemo(() => {
-    const items = [
+    const showShisha = isAllStores || selectedStore === '201' || selectedStore === '202'
+    return [
       {
-        label: '売上合計額',
+        label: '合計組数',
+        value: (
+          <span className="inline-flex items-baseline justify-end gap-3">
+            <ValueWithUnit value={summary.totalGroups} unit="組" align="center" />
+            <ValueWithUnit value={summary.totalCustomers} unit="人" align="center" />
+          </span>
+        )
+      },
+      {
+        label: 'シーシャ販売数',
+        value: showShisha
+          ? <ValueWithUnit value={summary.totalShisha} unit="本" />
+          : <span className="text-sm text-muted">-</span>
+      },
+      {
+        label: '売上合計',
         value: <ValueWithUnit value={summary.totalSales} unit="円" />
       },
       {
-        label: '内クレカ決済',
+        label: '内クレカ',
         value: <ValueWithUnit value={summary.totalCredit} unit="円" />
       },
       {
-        label: '支出合計額',
+        label: '支出合計',
         value: <ValueWithUnit value={summary.totalExpense + summary.totalSalary} unit="円" />
       },
       {
-        label: '内人件費額',
+        label: '内人件費',
         value: <ValueWithUnit value={summary.totalSalary} unit="円" />
       },
       {
-        label: '収支合計額',
+        label: '収支合計',
         value: (
           <ValueWithUnit
             value={summary.totalBalance}
@@ -559,24 +575,8 @@ const MonthlyReport = () => {
           />
         ),
         highlight: true
-      },
-      {
-        label: '合計組数',
-        value: (
-          <span className="inline-flex items-baseline justify-end gap-3">
-            <ValueWithUnit value={summary.totalGroups} unit="組" align="center" />
-            <ValueWithUnit value={summary.totalCustomers} unit="人" align="center" />
-          </span>
-        )
       }
     ]
-    if (isAllStores || selectedStore === '201' || selectedStore === '202') {
-      items.push({
-        label: 'シーシャ販売数',
-        value: <ValueWithUnit value={summary.totalShisha} unit="本" />
-      })
-    }
-    return items
   }, [summary, selectedStore, isAllStores])
 
   const years = useMemo(() => Array.from({ length: 5 }, (_, i) => today.getFullYear() - i), [today])

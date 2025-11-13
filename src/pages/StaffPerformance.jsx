@@ -274,7 +274,11 @@ const StaffPerformance = () => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
             <SummaryItem
-              label="合計組数人数"
+              label="出勤日数"
+              value={<ValueWithUnit value={summary.workDays} unit="日" />}
+            />
+            <SummaryItem
+              label="合計組数"
               value={
                 <span className="inline-flex items-baseline justify-end gap-3">
                   <ValueWithUnit value={summary.totalGroups} unit="組" align="center" />
@@ -287,11 +291,7 @@ const StaffPerformance = () => {
               value={showShishaSummary ? <ValueWithUnit value={summary.totalShisha} unit="本" /> : '-'}
             />
             <SummaryItem
-              label="出勤日数"
-              value={<ValueWithUnit value={summary.workDays} unit="日" />}
-            />
-            <SummaryItem
-              label="合計売上額"
+              label="売上額"
               value={
                 <span className="flex flex-col items-end leading-tight text-right gap-0.5">
                   <ValueWithUnit value={summary.totalSales} unit="円" />
@@ -302,6 +302,10 @@ const StaffPerformance = () => {
               }
             />
             <SummaryItem
+              label="シャンパン天引額"
+              value={<ValueWithUnit value={summary.totalChampagneDeduction} unit="円" />}
+            />
+            <SummaryItem
               label="売上内給与％"
               value={
                 (() => {
@@ -310,11 +314,11 @@ const StaffPerformance = () => {
                       ? Math.round((summary.totalBaseSalary / summary.totalSales) * 1000) / 10
                       : 0
                   return (
-                <ValueWithUnit
+                    <ValueWithUnit
                       value={salaryRatio}
-                  unit="%"
+                      unit="%"
                       valueClassName={salaryRatio > 100 ? 'text-red-600' : undefined}
-                />
+                    />
                   )
                 })()
               }
@@ -322,10 +326,6 @@ const StaffPerformance = () => {
             <SummaryItem
               label="給与端数支給額"
               value={<ValueWithUnit value={summary.totalFractionCut} unit="円" />}
-            />
-            <SummaryItem
-              label="シャンパン合計天引額"
-              value={<ValueWithUnit value={summary.totalChampagneDeduction} unit="円" />}
             />
             <SummaryItem
               label="合計給与額"

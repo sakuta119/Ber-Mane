@@ -20,9 +20,8 @@ const DailySummary = ({ data }) => {
       </div>
       
       <div className="space-y-3 p-4">
-        <div className="flex justify-between items-center py-2 border-b border-gray-200">
-          <span className="text-sm font-medium text-gray-700">年月日</span>
-          <span className="text-sm text-gray-900">{formattedDate}</span>
+        <div className="py-2 border-b border-gray-200 text-left">
+          <span className="text-sm font-semibold text-gray-900">{formattedDate}</span>
         </div>
 
         <div className="flex justify-between items-center py-2 border-b border-gray-200">
