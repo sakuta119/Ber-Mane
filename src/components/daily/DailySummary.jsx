@@ -29,13 +29,13 @@ const DailySummary = ({ data }) => {
             <span className="text-sm font-medium text-gray-700">売上合計額</span>
             <ValueWithUnit value={data.totalSales} unit="円" valueClassName="text-sm font-semibold text-gray-900" />
           </div>
-          <div className="flex justify-between items-center mt-1 text-xs text-muted">
-            <span className="text-xs text-gray-600">内クレカ決済</span>
+          <div className="flex justify-between items-center mt-1">
+            <span className="text-xs text-gray-500">内クレカ決済</span>
             <ValueWithUnit
               value={data.creditAmount}
               unit="円"
-              valueClassName="text-xs text-gray-600 font-medium"
-              unitClassName="text-[10px] text-gray-500"
+              valueClassName="text-xs text-gray-500 font-medium"
+              unitClassName="text-[10px] text-gray-400"
             />
           </div>
         </div>
@@ -49,13 +49,13 @@ const DailySummary = ({ data }) => {
               valueClassName="text-sm font-semibold text-gray-900"
             />
           </div>
-          <div className="flex justify-between items-center mt-1 text-xs text-muted">
-            <span className="text-xs text-gray-600">内人件費額</span>
+          <div className="flex justify-between items-center mt-1">
+            <span className="text-xs text-gray-500">内人件費額</span>
             <ValueWithUnit
               value={data.totalSalary}
               unit="円"
-              valueClassName="text-xs text-gray-600 font-medium"
-              unitClassName="text-[10px] text-gray-500"
+              valueClassName="text-xs text-gray-500 font-medium"
+              unitClassName="text-[10px] text-gray-400"
             />
           </div>
         </div>

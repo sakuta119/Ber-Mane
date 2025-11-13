@@ -62,9 +62,6 @@ const SalaryInput = ({ data, onChange, store, salesAmount, calculatedSalary, pai
             <div className="px-3 py-2 bg-surface-alt border border-default rounded-md transition-colors">
               <ValueWithUnit value={calculatedSalary} unit="円" />
             </div>
-            <p className="text-xs text-muted mt-1">
-              売上: {salesAmount.toLocaleString()}円 × 45%
-            </p>
           </div>
         )}
 

@@ -544,13 +544,13 @@ const YearlyReport = () => {
         value: (
           <div className="flex flex-col items-end text-right gap-1">
             <ValueWithUnit value={summary.totalSales} unit="円" />
-            <div className="flex items-center gap-1 text-xs text-muted">
-              <span>内クレカ決済</span>
+            <div className="flex justify-between w-full text-xs">
+              <span className="text-gray-500">内クレカ決済</span>
               <ValueWithUnit
                 value={summary.totalCredit}
                 unit="円"
-                valueClassName="text-xs text-muted font-medium"
-                unitClassName="text-[10px] text-muted"
+                valueClassName="text-xs text-gray-500 font-medium"
+                unitClassName="text-[10px] text-gray-400"
               />
             </div>
           </div>
@@ -561,13 +561,13 @@ const YearlyReport = () => {
         value: (
           <div className="flex flex-col items-end text-right gap-1">
             <ValueWithUnit value={summary.totalExpense + summary.totalSalary} unit="円" />
-            <div className="flex items-center gap-1 text-xs text-muted">
-              <span>内人件費額</span>
+            <div className="flex justify-between w-full text-xs">
+              <span className="text-gray-500">内人件費額</span>
               <ValueWithUnit
                 value={summary.totalSalary}
                 unit="円"
-                valueClassName="text-xs text-muted font-medium"
-                unitClassName="text-[10px] text-muted"
+                valueClassName="text-xs text-gray-500 font-medium"
+                unitClassName="text-[10px] text-gray-400"
               />
             </div>
           </div>
