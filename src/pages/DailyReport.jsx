@@ -7,7 +7,6 @@ import ExpenseInput from '../components/daily/ExpenseInput'
 import DailySummary from '../components/daily/DailySummary'
 import StaffResultsTable from '../components/daily/StaffResultsTable'
 import { supabase } from '../lib/supabase'
-import { initStaff } from '../utils/initStaff'
 
 const STORES = ['TEPPEN', '201', '202']
 
@@ -69,8 +68,6 @@ const DailyReport = () => {
   const loadStaffs = async () => {
     try {
       // 初期スタッフを登録
-      await initStaff()
-      
       // スタッフ一覧を取得
       const { data, error } = await supabase
         .from('staffs')
