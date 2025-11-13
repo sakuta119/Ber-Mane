@@ -291,12 +291,7 @@ const StaffPerformance = () => {
               value={<ValueWithUnit value={summary.workDays} unit="日" />}
             />
             <SummaryItem
-              label={
-                <span className="flex flex-col md:flex-row md:items-center md:gap-1">
-                  <span>合計</span>
-                  <span>売上額</span>
-                </span>
-              }
+              label="合計売上額"
               value={
                 <span className="flex flex-col items-end leading-tight text-right gap-0.5">
                   <ValueWithUnit value={summary.totalSales} unit="円" />
@@ -309,10 +304,19 @@ const StaffPerformance = () => {
             <SummaryItem
               label="売上内給与％"
               value={
+                (() => {
+                  const salaryRatio =
+                    summary.totalSales > 0
+                      ? Math.round((summary.totalBaseSalary / summary.totalSales) * 1000) / 10
+                      : 0
+                  return (
                 <ValueWithUnit
-                  value={summary.totalSales > 0 ? Math.round((summary.totalBaseSalary / summary.totalSales) * 1000) / 10 : 0}
+                      value={salaryRatio}
                   unit="%"
+                      valueClassName={salaryRatio > 100 ? 'text-red-600' : undefined}
                 />
+                  )
+                })()
               }
             />
             <SummaryItem
@@ -320,12 +324,7 @@ const StaffPerformance = () => {
               value={<ValueWithUnit value={summary.totalFractionCut} unit="円" />}
             />
             <SummaryItem
-              label={
-                <span className="flex flex-col md:flex-row md:items-center md:gap-1">
-                  <span>シャンパン</span>
-                  <span>合計天引額</span>
-                </span>
-              }
+              label="シャンパン合計天引額"
               value={<ValueWithUnit value={summary.totalChampagneDeduction} unit="円" />}
             />
             <SummaryItem
