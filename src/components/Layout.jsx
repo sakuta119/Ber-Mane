@@ -36,6 +36,10 @@ const Layout = ({ children }) => {
     }
   }, [])
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }, [location.pathname])
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--app-bg)', color: 'var(--text-primary)' }}>
       <header className="fixed top-0 left-0 right-0 z-50 text-white shadow-md bg-header transition-colors">
