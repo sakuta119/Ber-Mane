@@ -541,19 +541,39 @@ const YearlyReport = () => {
       },
       {
         label: '売上合計',
-        value: <ValueWithUnit value={summary.totalSales} unit="円" />
-      },
-      {
-        label: '内クレカ',
-        value: <ValueWithUnit value={summary.totalCredit} unit="円" />
+        value: (
+          <span className="flex flex-col items-end gap-1 text-right">
+            <ValueWithUnit value={summary.totalSales} unit="円" />
+            <span className="inline-flex items-baseline gap-1 text-xs text-muted">
+              <span>内クレカ決済</span>
+              <ValueWithUnit
+                value={summary.totalCredit}
+                unit="円"
+                valueClassName="text-xs text-muted font-medium"
+                unitClassName="text-[10px] text-muted"
+                className="text-xs text-muted"
+              />
+            </span>
+          </span>
+        )
       },
       {
         label: '支出合計',
-        value: <ValueWithUnit value={summary.totalExpense + summary.totalSalary} unit="円" />
-      },
-      {
-        label: '内人件費',
-        value: <ValueWithUnit value={summary.totalSalary} unit="円" />
+        value: (
+          <span className="flex flex-col items-end gap-1 text-right">
+            <ValueWithUnit value={summary.totalExpense + summary.totalSalary} unit="円" />
+            <span className="inline-flex items-baseline gap-1 text-xs text-muted">
+              <span>内人件費額</span>
+              <ValueWithUnit
+                value={summary.totalSalary}
+                unit="円"
+                valueClassName="text-xs text-muted font-medium"
+                unitClassName="text-[10px] text-muted"
+                className="text-xs text-muted"
+              />
+            </span>
+          </span>
+        )
       },
       {
         label: '収支合計',
