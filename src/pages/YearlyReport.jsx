@@ -763,7 +763,7 @@ const YearlyReport = () => {
               </div>
             ) : (
               FIXED_EXPENSE_FIELDS.map(field => (
-                <div key={field.key} className="border border-gray-200 rounded-md px-4 py-3 bg-[#F6F7F8]">
+                <div key={field.key} className="border border-default rounded-md px-4 py-3 bg-surface-alt transition-colors">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-gray-700">{field.label}</span>
                     <ValueWithUnit value={currentFixedExpenses[field.key] || 0} unit="円" />
