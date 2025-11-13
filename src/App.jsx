@@ -12,7 +12,7 @@ import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import Maintenance from './pages/Maintenance'
 
-const IS_MAINTENANCE = true
+const IS_MAINTENANCE = false
 
 function App() {
   console.log('App component is rendering')
