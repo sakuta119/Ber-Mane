@@ -10,9 +10,21 @@ import Signup from './pages/Signup'
 import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
+import Maintenance from './pages/Maintenance'
+
+const IS_MAINTENANCE = true
 
 function App() {
   console.log('App component is rendering')
+
+  if (IS_MAINTENANCE) {
+    return (
+      <ThemeProvider>
+        <Maintenance />
+      </ThemeProvider>
+    )
+  }
+
   return (
     <Router>
       <ThemeProvider>
