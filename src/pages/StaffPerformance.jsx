@@ -272,7 +272,7 @@ const StaffPerformance = () => {
               {getStaffName(selectedStaffId)} の成績サマリー（{selectedYear}年{selectedMonth}月）
             </h3>
           </div>
-          <div className="grid grid-cols-2 gap-4 p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
             <SummaryItem
               label="合計組数人数"
               value={
@@ -291,26 +291,41 @@ const StaffPerformance = () => {
               value={<ValueWithUnit value={summary.workDays} unit="日" />}
             />
             <SummaryItem
-              label="合計売上額"
+              label={
+                <span className="flex flex-col md:flex-row md:items-center md:gap-1">
+                  <span>合計</span>
+                  <span>売上額</span>
+                </span>
+              }
               value={
-                <span className="inline-flex items-baseline justify-end gap-2 text-right">
+                <span className="flex flex-col items-end leading-tight text-right gap-0.5">
                   <ValueWithUnit value={summary.totalSales} unit="円" />
-                  <span className="text-xs text-gray-600">
+                  <span className="text-xs text-muted">
                     （内クレカ決済{summary.totalCredit.toLocaleString()}円）
                   </span>
                 </span>
               }
             />
             <SummaryItem
-              label="日給額"
-              value={<ValueWithUnit value={summary.dailyPaid} unit="円" />}
+              label="売上内給与％"
+              value={
+                <ValueWithUnit
+                  value={summary.totalSales > 0 ? Math.round((summary.totalBaseSalary / summary.totalSales) * 1000) / 10 : 0}
+                  unit="%"
+                />
+              }
             />
             <SummaryItem
               label="給与端数支給額"
               value={<ValueWithUnit value={summary.totalFractionCut} unit="円" />}
             />
             <SummaryItem
-              label="シャンパン合計天引額"
+              label={
+                <span className="flex flex-col md:flex-row md:items-center md:gap-1">
+                  <span>シャンパン</span>
+                  <span>合計天引額</span>
+                </span>
+              }
               value={<ValueWithUnit value={summary.totalChampagneDeduction} unit="円" />}
             />
             <SummaryItem
