@@ -31,7 +31,7 @@ const createInitialManualAggregates = () => STORES.reduce((acc, store) => {
   return acc
 }, {})
 
-function SummaryItem({ label, value, highlight = false }) {
+function SummaryItem({ label, value, highlight = false, hideLabel = false }) {
   return (
     <div
       className={`flex justify-between items-center px-3 py-2 rounded-md border ${highlight ? 'shadow-md' : ''}`}
@@ -41,7 +41,9 @@ function SummaryItem({ label, value, highlight = false }) {
         color: 'var(--text-primary)'
       }}
     >
-      <span className="text-sm font-medium text-gray-700">{label}</span>
+      {!hideLabel && (
+        <span className="text-sm font-medium text-gray-700">{label}</span>
+      )}
       <span
         className="text-sm font-semibold"
         style={highlight ? { color: 'var(--accent)' } : { color: 'var(--text-primary)' }}
@@ -541,6 +543,7 @@ const YearlyReport = () => {
       },
       {
         label: '売上合計額',
+        hideLabel: true,
         value: (
           <div className="flex flex-col items-end gap-1 text-right">
             <div className="flex items-baseline gap-1">
@@ -568,6 +571,7 @@ const YearlyReport = () => {
       },
       {
         label: '支出合計額',
+        hideLabel: true,
         value: (
           <div className="flex flex-col items-end gap-1 text-right">
             <div className="flex items-baseline gap-1">
