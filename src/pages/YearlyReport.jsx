@@ -548,12 +548,13 @@ const YearlyReport = () => {
               <ValueWithUnit
                 value={summary.totalSales}
                 unit="円"
+                align="right"
                 valueClassName="text-sm text-gray-900"
                 unitClassName="text-[10px] text-gray-500"
               />
             </div>
             <div className="flex items-baseline gap-1 text-xs text-gray-500">
-              <span>内クレカ決済/</span>
+              <span>内クレカ決済額/</span>
               <ValueWithUnit
                 value={summary.totalCredit}
                 unit="円"
