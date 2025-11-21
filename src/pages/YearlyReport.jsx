@@ -34,17 +34,17 @@ const createInitialManualAggregates = () => STORES.reduce((acc, store) => {
 function SummaryItem({ label, value, highlight = false, subLabel }) {
   return (
     <div
-      className={`flex justify-between items-center px-3 py-2 rounded-md border ${highlight ? 'shadow-md' : ''}`}
+      className={`flex justify-between items-start px-3 py-2 rounded-md border ${highlight ? 'shadow-md' : ''}`}
       style={{
         backgroundColor: highlight ? 'var(--surface-highlight)' : 'var(--surface)',
         borderColor: highlight ? 'var(--border-highlight)' : 'var(--border-color)',
         color: 'var(--text-primary)'
       }}
     >
-      <div>
+      <div className="flex flex-col gap-0.5">
         <span className="text-sm font-medium text-gray-700">{label}</span>
         {subLabel && (
-          <span className="text-[11px] text-gray-500 block mt-1">{subLabel}</span>
+          <span className="text-[11px] text-gray-500 leading-tight">{subLabel}</span>
         )}
       </div>
       <span
