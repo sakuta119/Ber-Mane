@@ -31,7 +31,7 @@ const createInitialMonthlyExpenses = () => STORES.reduce((acc, store) => {
   return acc
 }, {})
 
-function SummaryItem({ label, value, highlight = false }) {
+function SummaryItem({ label, value, highlight = false, subLabel }) {
   return (
     <div
       className={`flex justify-between items-center px-3 py-2 rounded-md border ${highlight ? 'shadow-md' : ''}`}
@@ -41,7 +41,12 @@ function SummaryItem({ label, value, highlight = false }) {
         color: 'var(--text-primary)'
       }}
     >
-      <span className="text-sm font-medium text-gray-700">{label}</span>
+      <div>
+        <span className="text-sm font-medium text-gray-700">{label}</span>
+        {subLabel && (
+          <span className="text-[11px] text-gray-500 block mt-1">{subLabel}</span>
+        )}
+      </div>
       <span
         className="text-sm font-semibold"
         style={highlight ? { color: 'var(--accent)' } : { color: 'var(--text-primary)' }}
@@ -550,6 +555,7 @@ const MonthlyReport = () => {
       },
       {
         label: '売上合計額',
+        subLabel: '内クレカ決済額',
         value: (
           <div className="space-y-1 text-right">
             <ValueWithUnit
@@ -559,21 +565,19 @@ const MonthlyReport = () => {
               unitClassName="text-[10px] text-gray-500"
               align="right"
             />
-            <div className="flex items-center justify-between text-xs text-gray-500">
-              <span className="text-xs">内クレカ決済額</span>
-              <ValueWithUnit
-                value={summary.totalCredit}
-                unit="円"
-                align="right"
-                valueClassName="text-xs text-gray-500 font-medium"
-                unitClassName="text-[10px] text-gray-400"
-              />
-            </div>
+            <ValueWithUnit
+              value={summary.totalCredit}
+              unit="円"
+              valueClassName="text-xs text-gray-500 font-medium"
+              unitClassName="text-[10px] text-gray-400"
+              align="right"
+            />
           </div>
         )
       },
       {
         label: '支出合計額',
+        subLabel: '内人件費額',
         value: (
           <div className="space-y-1 text-right">
             <ValueWithUnit
@@ -583,16 +587,13 @@ const MonthlyReport = () => {
               unitClassName="text-[10px] text-gray-500"
               align="right"
             />
-            <div className="flex items-center justify-between text-xs text-gray-500">
-              <span className="text-xs">内人件費額</span>
-              <ValueWithUnit
-                value={summary.totalSalary}
-                unit="円"
-                align="right"
-                valueClassName="text-xs text-gray-500 font-medium"
-                unitClassName="text-[10px] text-gray-400"
-              />
-            </div>
+            <ValueWithUnit
+              value={summary.totalSalary}
+              unit="円"
+              valueClassName="text-xs text-gray-500 font-medium"
+              unitClassName="text-[10px] text-gray-400"
+              align="right"
+            />
           </div>
         )
       },
