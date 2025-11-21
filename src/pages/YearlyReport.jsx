@@ -542,17 +542,24 @@ const YearlyReport = () => {
       {
         label: '売上合計額',
         value: (
-          <div className="flex flex-col items-end text-right gap-1">
-            <ValueWithUnit value={summary.totalSales} unit="円" />
-            <div className="flex flex-col items-start w-full text-xs text-gray-500">
-              <span className="leading-tight">内クレカ決済</span>
+          <div className="flex flex-col items-end gap-1 text-right">
+            <div className="flex items-baseline gap-1">
+              <span className="text-xs text-gray-500">売上合計額/</span>
+              <ValueWithUnit
+                value={summary.totalSales}
+                unit="円"
+                valueClassName="text-sm text-gray-900"
+                unitClassName="text-[10px] text-gray-500"
+              />
+            </div>
+            <div className="flex items-baseline gap-1 text-xs text-gray-500">
+              <span>内クレカ決済/</span>
               <ValueWithUnit
                 value={summary.totalCredit}
                 unit="円"
-                align="left"
+                align="right"
                 valueClassName="text-xs text-gray-500 font-medium"
                 unitClassName="text-[10px] text-gray-400"
-                className="pl-2"
               />
             </div>
           </div>
@@ -561,17 +568,24 @@ const YearlyReport = () => {
       {
         label: '支出合計額',
         value: (
-          <div className="flex flex-col items-end text-right gap-1">
-            <ValueWithUnit value={summary.totalExpense + summary.totalSalary} unit="円" />
-            <div className="flex flex-col items-start w-full text-xs text-gray-500">
-              <span className="leading-tight">内人件費額</span>
+          <div className="flex flex-col items-end gap-1 text-right">
+            <div className="flex items-baseline gap-1">
+              <span className="text-xs text-gray-500">支出合計額/</span>
+              <ValueWithUnit
+                value={summary.totalExpense + summary.totalSalary}
+                unit="円"
+                valueClassName="text-sm text-gray-900"
+                unitClassName="text-[10px] text-gray-500"
+              />
+            </div>
+            <div className="flex items-baseline gap-1 text-xs text-gray-500">
+              <span>内人件費額/</span>
               <ValueWithUnit
                 value={summary.totalSalary}
                 unit="円"
-                align="left"
+                align="right"
                 valueClassName="text-xs text-gray-500 font-medium"
                 unitClassName="text-[10px] text-gray-400"
-                className="pl-2"
               />
             </div>
           </div>
