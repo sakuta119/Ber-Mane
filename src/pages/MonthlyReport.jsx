@@ -31,7 +31,7 @@ const createInitialMonthlyExpenses = () => STORES.reduce((acc, store) => {
   return acc
 }, {})
 
-function SummaryItem({ label, value, highlight = false, hideLabel = false }) {
+function SummaryItem({ label, value, highlight = false }) {
   return (
     <div
       className={`flex justify-between items-center px-3 py-2 rounded-md border ${highlight ? 'shadow-md' : ''}`}
@@ -41,7 +41,7 @@ function SummaryItem({ label, value, highlight = false, hideLabel = false }) {
         color: 'var(--text-primary)'
       }}
     >
-      {!hideLabel && <span className="text-sm font-medium text-gray-700">{label}</span>}
+      <span className="text-sm font-medium text-gray-700">{label}</span>
       <span
         className="text-sm font-semibold"
         style={highlight ? { color: 'var(--accent)' } : { color: 'var(--text-primary)' }}
@@ -550,19 +550,15 @@ const MonthlyReport = () => {
       },
       {
         label: '売上合計額',
-        hideLabel: true,
         value: (
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs text-gray-500">
-              <span className="text-xs">売上合計額</span>
-              <ValueWithUnit
-                value={summary.totalSales}
-                unit="円"
-                valueClassName="text-sm font-semibold text-gray-900"
-                unitClassName="text-[10px] text-gray-500"
-                align="right"
-              />
-            </div>
+          <div className="space-y-1 text-right">
+            <ValueWithUnit
+              value={summary.totalSales}
+              unit="円"
+              valueClassName="text-sm font-semibold text-gray-900"
+              unitClassName="text-[10px] text-gray-500"
+              align="right"
+            />
             <div className="flex items-center justify-between text-xs text-gray-500">
               <span className="text-xs">内クレカ決済額</span>
               <ValueWithUnit
@@ -578,19 +574,15 @@ const MonthlyReport = () => {
       },
       {
         label: '支出合計額',
-        hideLabel: true,
         value: (
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs text-gray-500">
-              <span className="text-xs">支出合計額</span>
-              <ValueWithUnit
-                value={summary.totalExpense + summary.totalSalary}
-                unit="円"
-                valueClassName="text-sm font-semibold text-gray-900"
-                unitClassName="text-[10px] text-gray-500"
-                align="right"
-              />
-            </div>
+          <div className="space-y-1 text-right">
+            <ValueWithUnit
+              value={summary.totalExpense + summary.totalSalary}
+              unit="円"
+              valueClassName="text-sm font-semibold text-gray-900"
+              unitClassName="text-[10px] text-gray-500"
+              align="right"
+            />
             <div className="flex items-center justify-between text-xs text-gray-500">
               <span className="text-xs">内人件費額</span>
               <ValueWithUnit
