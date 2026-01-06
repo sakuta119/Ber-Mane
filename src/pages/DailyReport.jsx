@@ -234,14 +234,22 @@ const DailyReport = () => {
     }
   }
 
-  const calculateSalary = () => {
+  // 自動算出値（売上の45%）
+  const calculateAutoSalary = () => {
     if (selectedStore === '202') {
-      // 202店舗は手動入力
-      return parseFloat(salaryData.baseSalary) || 0
+      return 0
     }
-    // TEPPEN・201は売上の45%
     const sales = parseFloat(salesData.salesAmount) || 0
     return Math.floor(sales * 0.45)
+  }
+
+  // 実際に使用する給与額（手動入力があればそれを、なければ自動算出値）
+  const calculateSalary = () => {
+    const manualSalary = parseFloat(salaryData.baseSalary)
+    if (manualSalary && manualSalary > 0) {
+      return manualSalary
+    }
+    return calculateAutoSalary()
   }
 
   const calculatePaidSalary = () => {
@@ -256,7 +264,26 @@ const DailyReport = () => {
 
   const handleNextStaff = async () => {
     // 現在のスタッフのデータを保存
-    await handleSave()
+    if (selectedStaffId) {
+      await handleSave()
+    }
+    
+    // 次のスタッフを選択（現在選択されているスタッフの次、または最初のスタッフ）
+    let nextStaffId = null
+    if (staffs.length > 0) {
+      const filteredStaffs = staffs.filter(staff => 
+        !staff.store_ids || staff.store_ids.length === 0 || staff.store_ids.includes(selectedStore)
+      )
+      if (filteredStaffs.length > 0) {
+        const currentIndex = selectedStaffId 
+          ? filteredStaffs.findIndex(s => s.id === selectedStaffId)
+          : -1
+        const nextIndex = currentIndex >= 0 && currentIndex < filteredStaffs.length - 1 
+          ? currentIndex + 1 
+          : 0
+        nextStaffId = filteredStaffs[nextIndex].id
+      }
+    }
     
     // 入力データをリセット
     setSalesData({
@@ -272,13 +299,46 @@ const DailyReport = () => {
     })
     setCombinedMemo('')
     
-    // 次のスタッフを選択（現在選択されているスタッフの次、または最初のスタッフ）
-    if (staffs.length > 0) {
-      const currentIndex = staffs.findIndex(s => s.id === selectedStaffId)
-      const nextIndex = currentIndex >= 0 && currentIndex < staffs.length - 1 
-        ? currentIndex + 1 
-        : 0
-      setSelectedStaffId(staffs[nextIndex].id)
+    // 次のスタッフを選択（入力フィールドをリセットした後に設定）
+    if (nextStaffId) {
+      setSelectedStaffId(nextStaffId)
+    } else {
+      setSelectedStaffId(null)
+    }
+    
+    // 売上入力セクションまでスクロール
+    setTimeout(() => {
+      const salesInputElement = document.getElementById('sales-input-section')
+      if (salesInputElement) {
+        salesInputElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }, 100)
+  }
+
+  const handleDeleteStaffResult = async (resultId, staffId) => {
+    if (!window.confirm(`スタッフ「${staffs.find(s => s.id === staffId)?.name || `ID: ${staffId}`}」の実績データを削除しますか？`)) {
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('staff_daily_results')
+        .delete()
+        .eq('id', resultId)
+
+      if (error) {
+        console.error('Error deleting staff result:', error)
+        alert('削除に失敗しました')
+        return
+      }
+
+      // スタッフ実績データを再読み込み
+      await loadStaffResults()
+      setStatusMessage('スタッフ実績を削除しました')
+      setTimeout(() => setStatusMessage(''), 3000)
+    } catch (error) {
+      console.error('Error deleting staff result:', error)
+      alert('削除に失敗しました')
     }
   }
 
@@ -287,40 +347,6 @@ const DailyReport = () => {
     setSaveStatus('保存中...')
 
     try {
-      const totalSalary = calculateSalary()
-      const paidSalary = calculatePaidSalary()
-      const totalExpense = expenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0)
-      const totalSales = parseFloat(salesData.salesAmount) || 0
-      const totalCredit = parseFloat(salesData.creditAmount) || 0
-      const totalGroups = parseFloat(salesData.groups) || 0
-      const totalCustomers = parseFloat(salesData.customers) || 0
-      const totalShisha = parseFloat(salesData.shishaCount) || 0
-
-      // 日報データの保存
-      const { data: reportData, error: reportError } = await supabase
-        .from('daily_reports')
-        .upsert({
-          date: selectedDate,
-          store_id: selectedStore,
-          total_sales_amount: totalSales,
-          credit_amount: totalCredit,
-          total_groups: totalGroups,
-          total_customers: totalCustomers,
-          total_shisha: totalShisha,
-          total_salary_amount: totalSalary,
-          total_expense_amount: totalExpense,
-          memo: combinedMemo,
-          opinion: opinion
-        }, {
-          onConflict: 'date,store_id'
-        })
-        .select()
-        .maybeSingle()
-
-      if (reportError) {
-        throw reportError
-      }
-
       // 経費データの保存
       const expensePromises = expenses.map(expense => {
         if (expense.id) {
@@ -347,41 +373,196 @@ const DailyReport = () => {
 
       await Promise.all(expensePromises)
 
-      // スタッフの日次実績を保存
+      // スタッフの日次実績を保存（スタッフが選択されている AND 何か数値が入力されている場合のみ）
       if (selectedStaffId) {
+        const salesAmount = parseFloat(salesData.salesAmount) || 0
+        const creditAmount = parseFloat(salesData.creditAmount) || 0
+        const shishaCount = parseFloat(salesData.shishaCount) || 0
+        const groups = parseFloat(salesData.groups) || 0
+        const customers = parseFloat(salesData.customers) || 0
         const baseSalary = calculateSalary()
-        const deduction = parseFloat(salaryData.champagneDeduction) || 0
-        const paidSalary = calculatePaidSalary()
-        // 端数切捨ては給与額（シャンパン天引額を引く前）の下三桁のみ
-        const fractionCut = baseSalary % 1000
 
-        await supabase
-          .from('staff_daily_results')
-          .upsert({
-            staff_id: selectedStaffId,
-            store_id: selectedStore,
-            date: selectedDate,
-            sales_amount: parseFloat(salesData.salesAmount) || 0,
-            credit_amount: parseFloat(salesData.creditAmount) || 0,
-            shisha_count: parseFloat(salesData.shishaCount) || 0,
-            groups: parseFloat(salesData.groups) || 0,
-            customers: parseFloat(salesData.customers) || 0,
-            base_salary: baseSalary,
-            champagne_deduction: deduction,
-            paid_salary: paidSalary,
-            fraction_cut: fractionCut,
-            sales_memo: combinedMemo || '',
-            salary_memo: combinedMemo || ''
-          }, {
-            onConflict: 'staff_id,store_id,date'
-          })
+        // 何か数値が入力されているかチェック
+        const hasData = salesAmount > 0 || 
+                       creditAmount > 0 || 
+                       shishaCount > 0 || 
+                       groups > 0 || 
+                       customers > 0 || 
+                       baseSalary > 0 ||
+                       parseFloat(salaryData.champagneDeduction) > 0 ||
+                       (combinedMemo && combinedMemo.trim().length > 0)
+
+        if (hasData) {
+          const deduction = parseFloat(salaryData.champagneDeduction) || 0
+          const paidSalary = calculatePaidSalary()
+          // 端数切捨ては給与額（シャンパン天引額を引く前）の下三桁のみ
+          const fractionCut = baseSalary % 1000
+
+          const { error: staffResultError } = await supabase
+            .from('staff_daily_results')
+            .upsert({
+              staff_id: selectedStaffId,
+              store_id: selectedStore,
+              date: selectedDate,
+              sales_amount: salesAmount,
+              credit_amount: creditAmount,
+              shisha_count: shishaCount,
+              groups: groups,
+              customers: customers,
+              base_salary: baseSalary,
+              champagne_deduction: deduction,
+              paid_salary: paidSalary,
+              fraction_cut: fractionCut,
+              sales_memo: combinedMemo || '',
+              salary_memo: combinedMemo || ''
+            }, {
+              onConflict: 'staff_id,store_id,date'
+            })
+
+          if (staffResultError) {
+            console.error('Error saving staff daily results:', staffResultError)
+            throw staffResultError
+          }
+        }
+      }
+
+      // スタッフ実績データを再読み込み（全スタッフの合計を計算するため）
+      // 直接クエリを実行して最新データを取得
+      const { data: allStaffResultsData, error: staffResultsError } = await supabase
+        .from('staff_daily_results')
+        .select('*')
+        .eq('date', selectedDate)
+        .eq('store_id', selectedStore)
+        .order('staff_id')
+
+      if (staffResultsError) {
+        console.error('Error loading staff results for summary:', staffResultsError)
+      }
+
+      // 全スタッフの合計値を計算
+      const allStaffResults = allStaffResultsData ? [...allStaffResultsData] : [...staffResults]
+      
+      // 現在入力中のスタッフのデータが既に保存済みかチェック（データが入力されている場合のみ）
+      if (selectedStaffId) {
+        const salesAmount = parseFloat(salesData.salesAmount) || 0
+        const creditAmount = parseFloat(salesData.creditAmount) || 0
+        const shishaCount = parseFloat(salesData.shishaCount) || 0
+        const groups = parseFloat(salesData.groups) || 0
+        const customers = parseFloat(salesData.customers) || 0
+        const baseSalary = calculateSalary()
+
+        // 何か数値が入力されているかチェック
+        const hasData = salesAmount > 0 || 
+                       creditAmount > 0 || 
+                       shishaCount > 0 || 
+                       groups > 0 || 
+                       customers > 0 || 
+                       baseSalary > 0 ||
+                       parseFloat(salaryData.champagneDeduction) > 0 ||
+                       (combinedMemo && combinedMemo.trim().length > 0)
+
+        if (hasData) {
+          const currentStaffResult = allStaffResults.find(r => r.staff_id === selectedStaffId)
+          if (!currentStaffResult) {
+            // まだ保存されていない場合は、現在の入力値を含める
+            allStaffResults.push({
+              staff_id: selectedStaffId,
+              sales_amount: salesAmount,
+              credit_amount: creditAmount,
+              shisha_count: shishaCount,
+              groups: groups,
+              customers: customers,
+              base_salary: baseSalary,
+              champagne_deduction: parseFloat(salaryData.champagneDeduction) || 0
+            })
+          } else {
+            // 既に保存済みの場合は、現在の入力値で更新
+            const index = allStaffResults.findIndex(r => r.staff_id === selectedStaffId)
+            if (index >= 0) {
+              allStaffResults[index] = {
+                ...allStaffResults[index],
+                sales_amount: salesAmount,
+                credit_amount: creditAmount,
+                shisha_count: shishaCount,
+                groups: groups,
+                customers: customers,
+                base_salary: baseSalary,
+                champagne_deduction: parseFloat(salaryData.champagneDeduction) || 0
+              }
+            }
+          }
+        }
+      }
+
+      // 全スタッフの合計を計算
+      const totalSales = allStaffResults.reduce((sum, result) => sum + (result.sales_amount || 0), 0)
+      const totalCredit = allStaffResults.reduce((sum, result) => sum + (result.credit_amount || 0), 0)
+      const totalSalary = allStaffResults.reduce((sum, result) => sum + (result.base_salary || 0), 0)
+      const totalGroups = allStaffResults.reduce((sum, result) => sum + (Number(result.groups) || 0), 0)
+      const totalCustomers = allStaffResults.reduce((sum, result) => sum + (Number(result.customers) || 0), 0)
+      const totalShisha = allStaffResults.reduce((sum, result) => sum + (result.shisha_count || 0), 0)
+      const totalExpense = expenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0)
+      const savedExpenseTotal = savedExpensesDisplay.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0)
+      const totalExpenseAmount = totalExpense + savedExpenseTotal
+
+      // 日報データの保存（全スタッフの合計値を保存）
+      const { data: reportData, error: reportError } = await supabase
+        .from('daily_reports')
+        .upsert({
+          date: selectedDate,
+          store_id: selectedStore,
+          total_sales_amount: totalSales,
+          credit_amount: totalCredit,
+          total_groups: totalGroups,
+          total_customers: totalCustomers,
+          total_shisha: totalShisha,
+          total_salary_amount: totalSalary,
+          total_expense_amount: totalExpenseAmount,
+          memo: combinedMemo,
+          opinion: opinion
+        }, {
+          onConflict: 'date,store_id'
+        })
+        .select()
+        .maybeSingle()
+
+      if (reportError) {
+        console.error('Error saving daily report:', reportError)
+        console.error('Save data:', {
+          date: selectedDate,
+          store_id: selectedStore,
+          total_sales_amount: totalSales,
+          credit_amount: totalCredit,
+          total_groups: totalGroups,
+          total_customers: totalCustomers,
+          total_shisha: totalShisha,
+          total_salary_amount: totalSalary,
+          total_expense_amount: totalExpenseAmount
+        })
+        throw reportError
+      }
+
+      if (reportData) {
+        console.log('Daily report saved successfully:', reportData)
+      } else {
+        console.warn('Daily report save returned no data')
       }
 
       setSaveStatus('保存完了')
       setTimeout(() => setSaveStatus(''), 2000)
       
-      // スタッフ実績データを再読み込み
+      // スタッフ実績データを再読み込み（表示を更新するため）
       await loadStaffResults()
+      
+      // スタッフが選択されていない場合、次のスタッフを自動選択
+      if (!selectedStaffId && staffs.length > 0) {
+        const filteredStaffs = staffs.filter(staff => 
+          !staff.store_ids || staff.store_ids.length === 0 || staff.store_ids.includes(selectedStore)
+        )
+        if (filteredStaffs.length > 0) {
+          setSelectedStaffId(filteredStaffs[0].id)
+        }
+      }
     } catch (error) {
       console.error('Error saving daily report:', error)
       setSaveStatus('保存エラー')
@@ -573,6 +754,7 @@ const DailyReport = () => {
       </div>
 
       {/* 売上入力 */}
+      <div id="sales-input-section">
       <SalesInput
         data={salesData}
         onChange={setSalesData}
@@ -581,6 +763,7 @@ const DailyReport = () => {
         selectedStaffId={selectedStaffId}
         onStaffChange={setSelectedStaffId}
       />
+      </div>
 
       {/* 給与入力 */}
       <SalaryInput
@@ -588,7 +771,7 @@ const DailyReport = () => {
         onChange={setSalaryData}
         store={selectedStore}
         salesAmount={parseFloat(salesData.salesAmount) || 0}
-        calculatedSalary={calculateSalary()}
+        calculatedSalary={calculateAutoSalary()}
         paidSalary={calculatePaidSalary()}
         staffs={staffs}
         selectedStaffId={selectedStaffId}
@@ -705,6 +888,7 @@ const DailyReport = () => {
         staffResults={staffResults}
         staffs={staffs}
         store={selectedStore}
+        onDelete={handleDeleteStaffResult}
       />
 
       {/* 保存ボタン */}

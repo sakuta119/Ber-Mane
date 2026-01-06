@@ -8,8 +8,13 @@ const SalaryInput = ({ data, onChange, store, salesAmount, calculatedSalary, pai
     })
   }
 
+  // 実際に使用する給与額（手動入力があればそれを、なければ自動算出値）
+  const actualSalary = data.baseSalary && parseFloat(data.baseSalary) > 0 
+    ? parseFloat(data.baseSalary) 
+    : calculatedSalary
+  
   // 端数切捨ては給与額（シャンパン天引額を引く前）の下三桁のみ
-  const fractionCut = calculatedSalary % 1000
+  const fractionCut = actualSalary % 1000
 
   return (
     <div className="bg-surface rounded-lg shadow border border-default overflow-hidden transition-colors">
@@ -40,30 +45,31 @@ const SalaryInput = ({ data, onChange, store, salesAmount, calculatedSalary, pai
               ))}
           </select>
         </div>
-        {store === '202' ? (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              給与額（手動入力）
-            </label>
-            <input
-              type="number"
-              inputMode="numeric"
-              value={data.baseSalary}
-              onChange={(e) => handleChange('baseSalary', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-bar-accent"
-              placeholder="0"
-            />
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            給与額（自動算出：売上の45%）
+          </label>
+          <div className="px-3 py-2 bg-surface-alt border border-default rounded-md transition-colors">
+            <ValueWithUnit value={calculatedSalary} unit="円" />
           </div>
-        ) : (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              給与額（自動算出：売上の45%）
-            </label>
-            <div className="px-3 py-2 bg-surface-alt border border-default rounded-md transition-colors">
-              <ValueWithUnit value={calculatedSalary} unit="円" />
-            </div>
-          </div>
-        )}
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            給与額（手動入力・自動算出を上書き）
+          </label>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={data.baseSalary}
+            onChange={(e) => handleChange('baseSalary', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-bar-accent"
+            placeholder="手動入力する場合はここに入力（未入力時は自動算出を使用）"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            手動入力がある場合、自動算出値より手動入力値を優先します
+          </p>
+        </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">

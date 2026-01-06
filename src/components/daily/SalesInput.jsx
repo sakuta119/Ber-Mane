@@ -41,7 +41,8 @@ const SalesInput = ({ data, onChange, store, staffs, selectedStaffId, onStaffCha
           </label>
           <input
             type="number"
-            inputMode="numeric"
+            step="0.1"
+            inputMode="decimal"
             value={data.groups}
             onChange={(e) => handleChange('groups', e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-bar-accent"
@@ -55,7 +56,8 @@ const SalesInput = ({ data, onChange, store, staffs, selectedStaffId, onStaffCha
           </label>
           <input
             type="number"
-            inputMode="numeric"
+            step="0.1"
+            inputMode="decimal"
             value={data.customers}
             onChange={(e) => handleChange('customers', e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-bar-accent"

@@ -409,58 +409,54 @@ const MonthlyReport = () => {
   }
 
   const summary = useMemo(() => {
-    if (!reports || reports.length === 0) {
-      return {
-        totalSales: 0,
-        totalCredit: 0,
-        totalExpense: 0,
-        totalSalary: 0,
-        totalGroups: 0,
-        totalCustomers: 0,
-        totalShisha: 0,
-        totalBalance: 0,
-        daysCount: 0
-      }
-    }
-
-    const totals = reports.reduce(
+    // 日報データから経費と日付を計算
+    const reportTotals = (reports || []).reduce(
       (acc, report) => {
-        acc.totalSales += report.total_sales_amount || 0
-        acc.totalCredit += report.credit_amount || 0
         acc.totalExpense += report.total_expense_amount || 0
-        acc.totalSalary += report.total_salary_amount || 0
-        acc.totalGroups += report.total_groups || 0
-        acc.totalCustomers += report.total_customers || 0
-        acc.totalShisha += report.total_shisha || 0
-        acc.totalBalance += (report.total_sales_amount || 0) - ((report.total_expense_amount || 0) + (report.total_salary_amount || 0))
         acc.uniqueDates.add(report.date)
+        return acc
+      },
+      {
+        totalExpense: 0,
+        uniqueDates: new Set()
+      }
+    )
+
+    // スタッフ実績から売上、クレカ決済、給与、組数、人数、シーシャ販売数を計算（これが最も正確）
+    const staffTotals = (staffMonthlyResults || []).reduce(
+      (acc, result) => {
+        acc.totalSales += result.sales_amount || 0
+        acc.totalCredit += result.credit_amount || 0
+        acc.totalSalary += result.base_salary || 0
+        acc.totalGroups += Number(result.groups) || 0
+        acc.totalCustomers += Number(result.customers) || 0
+        acc.totalShisha += result.shisha_count || 0
         return acc
       },
       {
         totalSales: 0,
         totalCredit: 0,
-        totalExpense: 0,
         totalSalary: 0,
         totalGroups: 0,
         totalCustomers: 0,
-        totalShisha: 0,
-        totalBalance: 0,
-        uniqueDates: new Set()
+        totalShisha: 0
       }
     )
 
+    const totalBalance = staffTotals.totalSales - (reportTotals.totalExpense + staffTotals.totalSalary)
+
     return {
-      totalSales: totals.totalSales,
-      totalCredit: totals.totalCredit,
-      totalExpense: totals.totalExpense,
-      totalSalary: totals.totalSalary,
-      totalGroups: totals.totalGroups,
-      totalCustomers: totals.totalCustomers,
-      totalShisha: totals.totalShisha,
-      totalBalance: totals.totalBalance,
-      daysCount: totals.uniqueDates.size
+      totalSales: staffTotals.totalSales,
+      totalCredit: staffTotals.totalCredit,
+      totalExpense: reportTotals.totalExpense,
+      totalSalary: staffTotals.totalSalary,
+      totalGroups: staffTotals.totalGroups,
+      totalCustomers: staffTotals.totalCustomers,
+      totalShisha: staffTotals.totalShisha,
+      totalBalance: totalBalance,
+      daysCount: reportTotals.uniqueDates.size
     }
-  }, [reports])
+  }, [reports, staffMonthlyResults])
 
   const isAllStores = selectedStore === ALL_STORES_OPTION
 

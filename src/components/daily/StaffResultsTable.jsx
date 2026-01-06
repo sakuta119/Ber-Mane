@@ -6,7 +6,8 @@ const StaffResultsTable = ({
   store,
   allowMemoInput = false,
   memoValues = {},
-  onMemoChange = () => {}
+  onMemoChange = () => {},
+  onDelete = null
 }) => {
   const getStaffName = (staffId) => {
     const staff = staffs.find((s) => s.id === staffId)
@@ -61,7 +62,10 @@ const StaffResultsTable = ({
                 </div>
               </th>
               <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">差引支給額</th>
-              <th className="px-3 py-2 text-center text-sm font-semibold border-yellow-200 whitespace-nowrap">備考</th>
+              <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">備考</th>
+              {onDelete && (
+                <th className="px-3 py-2 text-center text-sm font-semibold border-yellow-200 whitespace-nowrap">操作</th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -105,7 +109,7 @@ const StaffResultsTable = ({
                     valueClassName={(result.paid_salary || 0) < 0 ? 'text-red-600' : 'text-[#FCAF17]'}
                   />
                 </td>
-                <td className="px-4 py-2 text-sm text-gray-700 text-center whitespace-pre-wrap min-w-[220px]">
+                <td className="px-4 py-2 text-sm text-gray-700 text-center whitespace-pre-wrap min-w-[220px] border-r border-gray-200">
                   {allowMemoInput ? (
                     <textarea
                       value={memoValues[result.staff_id] || ''}
@@ -118,6 +122,17 @@ const StaffResultsTable = ({
                     result.sales_memo || result.salary_memo || '-'
                   )}
                 </td>
+                {onDelete && (
+                  <td className="px-3 py-2 text-center border-gray-200">
+                    <button
+                      onClick={() => onDelete(result.id, result.staff_id)}
+                      className="px-3 py-1 text-sm font-medium text-white bg-red-600 rounded hover:bg-red-700 transition-colors"
+                      title="このスタッフの実績データを削除"
+                    >
+                      削除
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
