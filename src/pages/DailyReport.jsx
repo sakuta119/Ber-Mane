@@ -245,9 +245,13 @@ const DailyReport = () => {
 
   // 実際に使用する給与額（手動入力があればそれを、なければ自動算出値）
   const calculateSalary = () => {
-    const manualSalary = parseFloat(salaryData.baseSalary)
-    if (manualSalary && manualSalary > 0) {
-      return manualSalary
+    // 手動入力が空文字列、null、undefinedでない場合は、その値を使用（0円も有効）
+    if (salaryData.baseSalary !== '' && salaryData.baseSalary !== null && salaryData.baseSalary !== undefined) {
+      const manualSalary = parseFloat(salaryData.baseSalary)
+      // NaNでない場合、0円も含めてその値を返す
+      if (!isNaN(manualSalary)) {
+        return manualSalary
+      }
     }
     return calculateAutoSalary()
   }
