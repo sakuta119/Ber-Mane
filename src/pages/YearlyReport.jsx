@@ -160,8 +160,20 @@ const YearlyReport = () => {
 
       if (error) throw error
 
+      // 各スタッフの勤務日数を計算（組数が入力されている日数をカウント）
+      const workDaysMap = {}
       const aggregatedMap = (data || []).reduce((acc, current) => {
         const key = current.staff_id
+        
+        // 勤務日数のカウント（組数が入力されている日）
+        if (!workDaysMap[key]) {
+          workDaysMap[key] = new Set()
+        }
+        const groupsValue = current.groups != null ? Number(current.groups) : 0
+        if (groupsValue > 0 || current.groups != null) {
+          workDaysMap[key].add(current.date)
+        }
+        
         if (!acc[key]) {
           acc[key] = {
             id: key,
@@ -174,15 +186,16 @@ const YearlyReport = () => {
             base_salary: 0,
             champagne_deduction: 0,
             paid_salary: 0,
-            fraction_cut: 0
+            fraction_cut: 0,
+            work_days: 0
           }
         }
 
         acc[key].sales_amount += current.sales_amount || 0
         acc[key].credit_amount += current.credit_amount || 0
         acc[key].shisha_count += current.shisha_count || 0
-        acc[key].groups += current.groups || 0
-        acc[key].customers += current.customers || 0
+        acc[key].groups += Number(current.groups) || 0
+        acc[key].customers += Number(current.customers) || 0
         acc[key].base_salary += current.base_salary || 0
         acc[key].champagne_deduction += current.champagne_deduction || 0
         acc[key].paid_salary += current.paid_salary || 0
@@ -190,6 +203,11 @@ const YearlyReport = () => {
 
         return acc
       }, {})
+
+      // 勤務日数を設定
+      Object.keys(aggregatedMap).forEach(staffId => {
+        aggregatedMap[staffId].work_days = workDaysMap[staffId]?.size || 0
+      })
 
       const aggregatedResults = Object.values(aggregatedMap).sort((a, b) => a.staff_id - b.staff_id)
       setStaffYearlyResults(aggregatedResults)
@@ -802,29 +820,51 @@ const YearlyReport = () => {
           </div>
 
           {manualExpenseEntries.length > 0 && (
-            <div className="space-y-3">
-              {manualExpenseEntries.map(expense => (
-                <div key={`${expense.store}-${expense.name}`} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                  {isAllStores && (
-                    <div className="md:col-span-3">
-                      <span className="block text-sm font-medium text-gray-500">店舗</span>
-                      <span className="text-sm text-gray-900 font-semibold">{expense.store}</span>
-                    </div>
-                  )}
-                  <div className={isAllStores ? 'md:col-span-4' : 'md:col-span-6'}>
-                    <span className="block text-sm font-medium text-gray-500">項目</span>
-                    <span className="text-sm text-gray-900 font-semibold">{expense.name}</span>
-                  </div>
-                  <div className={isAllStores ? 'md:col-span-3' : 'md:col-span-3'}>
-                    <span className="block text-sm font-medium text-gray-500">金額</span>
-                    <ValueWithUnit value={Number(expense.amount) || 0} unit="円" valueClassName="text-sm text-gray-900 font-semibold" />
-                  </div>
-                  <div className={isAllStores ? 'md:col-span-2' : 'md:col-span-3'}>
-                    <span className="block text-sm font-medium text-gray-500">備考</span>
-                    <span className="text-sm text-gray-700">{expense.notes || '-'}</span>
-                  </div>
-                </div>
-              ))}
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">月報登録済み経費一覧</h4>
+              <div className="bg-surface border border-default rounded-lg overflow-hidden transition-colors">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr style={{ backgroundColor: 'var(--accent)', color: 'var(--header-bg)' }}>
+                      <th
+                        className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200"
+                        style={{ borderTopLeftRadius: '0.5rem' }}
+                      >
+                        項目
+                      </th>
+                      {isAllStores && (
+                        <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200">店舗</th>
+                      )}
+                      <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200">金額</th>
+                      <th
+                        className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200"
+                        style={{ borderTopRightRadius: '0.5rem' }}
+                      >
+                        備考
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {manualExpenseEntries.map((expense, index) => (
+                      <tr
+                        key={`${expense.store}-${expense.name}-${index}`}
+                        className={`border-t border-gray-200 ${index % 2 === 0 ? 'bg-surface' : 'bg-surface-alt'}`}
+                      >
+                        <td className="px-3 py-2 text-sm text-gray-900 text-center border-r border-gray-200">{expense.name}</td>
+                        {isAllStores && (
+                          <td className="px-3 py-2 text-sm text-gray-700 text-center border-r border-gray-200">{expense.store || '-'}</td>
+                        )}
+                        <td className="px-3 py-2 text-sm text-gray-700 text-right border-r border-gray-200">
+                          <ValueWithUnit value={Number(expense.amount) || 0} unit="円" />
+                        </td>
+                        <td className="px-3 py-2 text-sm text-gray-700 text-center whitespace-pre-wrap border-r border-gray-200">
+                          {expense.notes || '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 

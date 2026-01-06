@@ -12,6 +12,8 @@ const ExpenseInput = ({
 }) => {
   const [expenseSuggestions, setExpenseSuggestions] = useState([])
   const [saveState, setSaveState] = useState('idle') // idle | saving | success | error
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState({}) // { [expenseIndex]: suggestionIndex }
+  const [showSuggestions, setShowSuggestions] = useState({}) // { [expenseIndex]: boolean }
 
   const currentButtonLabel = useMemo(() => {
     switch (saveState) {
@@ -62,6 +64,57 @@ const ExpenseInput = ({
       [field]: value
     }
     onChange(updated)
+    
+    // 適用フィールドが変更された場合、候補を表示
+    if (field === 'name') {
+      setShowSuggestions(prev => ({ ...prev, [index]: true }))
+      setActiveSuggestionIndex(prev => ({ ...prev, [index]: -1 }))
+    }
+  }
+
+  const getFilteredSuggestions = (index, inputValue) => {
+    if (!inputValue) return expenseSuggestions.slice(0, 10)
+    const filtered = expenseSuggestions.filter(suggestion =>
+      suggestion.toLowerCase().includes(inputValue.toLowerCase())
+    )
+    return filtered.slice(0, 10)
+  }
+
+  const handleSuggestionClick = (index, suggestion) => {
+    handleChange(index, 'name', suggestion)
+    setShowSuggestions(prev => ({ ...prev, [index]: false }))
+  }
+
+  const handleInputFocus = (index) => {
+    setShowSuggestions(prev => ({ ...prev, [index]: true }))
+  }
+
+  const handleInputBlur = (index) => {
+    // 少し遅延させて、クリックイベントが処理されるようにする
+    setTimeout(() => {
+      setShowSuggestions(prev => ({ ...prev, [index]: false }))
+    }, 200)
+  }
+
+  const handleKeyDown = (index, e, inputValue) => {
+    const filtered = getFilteredSuggestions(index, inputValue)
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveSuggestionIndex(prev => ({
+        ...prev,
+        [index]: Math.min((prev[index] ?? -1) + 1, filtered.length - 1)
+      }))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveSuggestionIndex(prev => ({
+        ...prev,
+        [index]: Math.max((prev[index] ?? -1) - 1, -1)
+      }))
+    } else if (e.key === 'Enter' && activeSuggestionIndex[index] >= 0 && filtered.length > 0) {
+      e.preventDefault()
+      handleSuggestionClick(index, filtered[activeSuggestionIndex[index]])
+    }
   }
 
   return (
@@ -94,22 +147,36 @@ const ExpenseInput = ({
                 <div className="flex-1 space-y-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      適用
+                      項目
                     </label>
                     <div className="relative">
                       <input
                         type="text"
-                        list={`expense-suggestions-${index}`}
                         value={expense.name}
                         onChange={(e) => handleChange(index, 'name', e.target.value)}
+                        onFocus={() => handleInputFocus(index)}
+                        onBlur={() => handleInputBlur(index)}
+                        onKeyDown={(e) => handleKeyDown(index, e, expense.name)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="経費名を入力..."
+                        autoComplete="off"
                       />
-                      <datalist id={`expense-suggestions-${index}`}>
-                        {expenseSuggestions.map((suggestion, i) => (
-                          <option key={i} value={suggestion} />
-                        ))}
-                      </datalist>
+                      {showSuggestions[index] && getFilteredSuggestions(index, expense.name).length > 0 && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                          {getFilteredSuggestions(index, expense.name).map((suggestion, i) => (
+                            <div
+                              key={i}
+                              className={`px-3 py-2 cursor-pointer text-gray-900 hover:bg-gray-100 ${
+                                activeSuggestionIndex[index] === i ? 'bg-gray-200' : 'bg-white'
+                              }`}
+                              onClick={() => handleSuggestionClick(index, suggestion)}
+                              onMouseEnter={() => setActiveSuggestionIndex(prev => ({ ...prev, [index]: i }))}
+                            >
+                              {suggestion}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 

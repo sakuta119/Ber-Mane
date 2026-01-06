@@ -37,6 +37,12 @@ const StaffResultsTable = ({
           <thead>
             <tr style={{ backgroundColor: '#FCAF17', color: '#00001C' }}>
               <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">スタッフ名</th>
+              <th className="px-3 py-2 text-center border-r border-yellow-200 whitespace-nowrap">
+                <div className="flex flex-col items-center text-xs font-semibold leading-tight">
+                  <span>勤務</span>
+                  <span>日数</span>
+                </div>
+              </th>
               <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">組数</th>
               <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">人数</th>
               {store !== 'TEPPEN' && (
@@ -76,6 +82,9 @@ const StaffResultsTable = ({
               >
                 <td className="px-3 py-2 text-sm font-medium text-gray-900 border-r border-gray-200">
                   <span className="block text-center">{getStaffName(result.staff_id)}</span>
+                </td>
+                <td className="px-3 py-2 text-sm text-gray-700 text-right border-r border-gray-200 whitespace-nowrap">
+                  <ValueWithUnit value={result.work_days ?? 0} unit="日" />
                 </td>
                 <td className="px-3 py-2 text-sm text-gray-700 text-right border-r border-gray-200 whitespace-nowrap">
                   <ValueWithUnit value={result.groups ?? 0} unit="組" />
