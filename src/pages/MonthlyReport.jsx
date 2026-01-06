@@ -73,6 +73,7 @@ const MonthlyReport = () => {
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
   const [expenseSaveState, setExpenseSaveState] = useState('idle') // idle | saving | success | error
+  const [editingExpenseIds, setEditingExpenseIds] = useState(new Set()) // 編集欄にある経費IDのセット
 
   useEffect(() => {
     loadStaffs()
@@ -397,9 +398,12 @@ const MonthlyReport = () => {
       })
 
       setMonthlyExpensesByStore(grouped)
+      // データを再読み込みしたら編集状態をクリア
+      setEditingExpenseIds(new Set())
     } catch (err) {
       console.error('Error loading monthly manual expenses:', err)
       setMonthlyExpensesByStore(createInitialMonthlyExpenses())
+      setEditingExpenseIds(new Set())
     }
   }
 
@@ -470,12 +474,15 @@ const MonthlyReport = () => {
     }, 0)
   ), [currentFixedExpenses, isAllStores])
 
-  // 入力中の経費（idがlocal-で始まるもの）
+  // 入力中の経費（local-で始まるID、またはeditingExpenseIdsに含まれるID）
   const editingExpenseEntries = useMemo(() => {
     if (isAllStores) {
       return STORES.flatMap(store =>
         (monthlyExpensesByStore[store] || [])
-          .filter(item => item.id && item.id.toString().startsWith('local-'))
+          .filter(item => {
+            const itemId = item.id?.toString()
+            return itemId && (itemId.startsWith('local-') || editingExpenseIds.has(item.id))
+          })
           .map(item => ({
             ...item,
             store: item.store || store
@@ -483,19 +490,25 @@ const MonthlyReport = () => {
       )
     }
     return (monthlyExpensesByStore[selectedStore] || [])
-      .filter(item => item.id && item.id.toString().startsWith('local-'))
+      .filter(item => {
+        const itemId = item.id?.toString()
+        return itemId && (itemId.startsWith('local-') || editingExpenseIds.has(item.id))
+      })
       .map(item => ({
         ...item,
         store: item.store || selectedStore
       }))
-  }, [isAllStores, monthlyExpensesByStore, selectedStore])
+  }, [isAllStores, monthlyExpensesByStore, selectedStore, editingExpenseIds])
 
-  // 登録済みの手動追加経費（idがlocal-で始まらないもの、つまりデータベースから読み込んだもの）
+  // 登録済みの手動追加経費（local-で始まらず、editingExpenseIdsにも含まれないもの）
   const savedManualExpenseEntries = useMemo(() => {
     if (isAllStores) {
       return STORES.flatMap(store =>
         (monthlyExpensesByStore[store] || [])
-          .filter(item => !item.id || !item.id.toString().startsWith('local-'))
+          .filter(item => {
+            const itemId = item.id?.toString()
+            return item && itemId && !itemId.startsWith('local-') && !editingExpenseIds.has(item.id)
+          })
           .map(item => ({
             ...item,
             store: item.store || store
@@ -503,12 +516,15 @@ const MonthlyReport = () => {
       )
     }
     return (monthlyExpensesByStore[selectedStore] || [])
-      .filter(item => !item.id || !item.id.toString().startsWith('local-'))
+      .filter(item => {
+        const itemId = item.id?.toString()
+        return item && itemId && !itemId.startsWith('local-') && !editingExpenseIds.has(item.id)
+      })
       .map(item => ({
         ...item,
         store: item.store || selectedStore
       }))
-  }, [isAllStores, monthlyExpensesByStore, selectedStore])
+  }, [isAllStores, monthlyExpensesByStore, selectedStore, editingExpenseIds])
 
   // 入力中と登録済みの両方を含む
   const manualExpenseEntries = useMemo(() => {
@@ -734,16 +750,9 @@ const MonthlyReport = () => {
   const handleSaveMonthlyExpenses = async () => {
     setExpenseSaveState('saving')
     try {
-      // 追加経費を保存（既存データを削除して再挿入）
-      const { error: deleteManualError } = await supabase
-        .from('monthly_manual_expenses')
-        .delete()
-        .eq('year', selectedYear)
-        .eq('month', selectedMonth)
-
-      if (deleteManualError) throw deleteManualError
-
-      const manualPayloads = []
+      // 編集欄にある経費を保存（idがあるものは更新、ないものは新規追加）
+      const expensePromises = []
+      
       STORES.forEach(store => {
         (monthlyExpensesByStore[store] || []).forEach(expense => {
           const trimmedName = expense.name?.trim() || ''
@@ -755,24 +764,49 @@ const MonthlyReport = () => {
             return
           }
 
-          manualPayloads.push({
-            year: selectedYear,
-            month: selectedMonth,
-            store_id: store,
-            name: trimmedName || '未分類',
-            amount: normalizedAmount,
-            note: trimmedNote || null
-          })
+          const expenseId = expense.id?.toString()
+          
+          if (expenseId && !expenseId.startsWith('local-')) {
+            // 既存の経費を更新（データベースID）
+            expensePromises.push(
+              supabase
+                .from('monthly_manual_expenses')
+                .update({
+                  name: trimmedName || '未分類',
+                  amount: normalizedAmount,
+                  note: trimmedNote || null
+                })
+                .eq('id', expense.id)
+            )
+          } else {
+            // 新規の経費を追加（local-で始まるID、またはIDがないもの）
+            expensePromises.push(
+              supabase
+                .from('monthly_manual_expenses')
+                .insert({
+                  year: selectedYear,
+                  month: selectedMonth,
+                  store_id: expense.store || store,
+                  name: trimmedName || '未分類',
+                  amount: normalizedAmount,
+                  note: trimmedNote || null
+                })
+            )
+          }
         })
       })
 
-      if (manualPayloads.length > 0) {
-        const { error: insertManualError } = await supabase
-          .from('monthly_manual_expenses')
-          .insert(manualPayloads)
+      await Promise.all(expensePromises)
 
-        if (insertManualError) throw insertManualError
-      }
+      // 編集欄をクリア（local-で始まるIDのもののみ残す、編集済みIDもクリア）
+      setEditingExpenseIds(new Set())
+      setMonthlyExpensesByStore(prev => {
+        const cleared = {}
+        STORES.forEach(store => {
+          cleared[store] = (prev[store] || []).filter(exp => exp.id && exp.id.toString().startsWith('local-'))
+        })
+        return cleared
+      })
 
       // 経費データを再読み込み
       await loadMonthlyManualExpenses()
@@ -797,6 +831,23 @@ const MonthlyReport = () => {
       default:
         return '経費を登録'
     }
+  }
+
+  // 経費編集開始（日報と同じ方式：保存済み経費を編集欄に移動）
+  const handleEditSavedExpense = (savedExpense) => {
+    if (!savedExpense || !savedExpense.id) return
+
+    // 編集欄に追加（IDをそのまま使用、日報と同じ方式）
+    setEditingExpenseIds(prev => new Set([...prev, savedExpense.id]))
+
+    // 編集欄までスクロール
+    setTimeout(() => {
+      const element = document.getElementById(`expense-amount-${savedExpense.id}`)
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        element.focus()
+      }
+    }, 100)
   }
 
   const handleFixedExpenseChange = (store, key, value) => {
@@ -1098,8 +1149,8 @@ const MonthlyReport = () => {
             <>
               {editingExpenseEntries.length > 0 && (
                 <div className="space-y-4">
-                  {editingExpenseEntries.map(expense => (
-                    <div key={expense.id} className="border border-gray-200 rounded-md p-4 space-y-3">
+                  {editingExpenseEntries.map((expense, index) => (
+                    <div key={expense.id || `temp-${index}`} className="border border-gray-200 rounded-md p-4 space-y-3">
                   <div className="flex justify-between items-start">
                     <div className="flex-1 space-y-3">
                       {isAllStores && (
@@ -1137,6 +1188,7 @@ const MonthlyReport = () => {
                           金額
                         </label>
                         <input
+                          id={`expense-amount-${expense.id || `temp-${index}`}`}
                           type="number"
                           inputMode="numeric"
                           value={expense.amount}
@@ -1203,11 +1255,12 @@ const MonthlyReport = () => {
                             <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200">店舗</th>
                           )}
                           <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200">金額</th>
+                          <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200">備考</th>
                           <th
-                            className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200"
+                            className="px-3 py-2 text-center text-sm font-semibold"
                             style={{ borderTopRightRadius: '0.5rem' }}
                           >
-                            備考
+                            <span className="sr-only">編集</span>
                           </th>
                         </tr>
                       </thead>
@@ -1226,6 +1279,15 @@ const MonthlyReport = () => {
                             </td>
                             <td className="px-3 py-2 text-sm text-gray-700 text-center whitespace-pre-wrap border-r border-gray-200">
                               {expense.note || '-'}
+                            </td>
+                            <td className="px-3 py-2 text-center align-middle" style={{ width: '5rem' }}>
+                              <button
+                                onClick={() => handleEditSavedExpense(expense)}
+                                className="px-3 py-1 text-sm font-medium rounded-md hover:bg-opacity-90 transition-colors"
+                                style={{ backgroundColor: 'var(--accent)', color: 'var(--header-bg)' }}
+                              >
+                                編集
+                              </button>
                             </td>
                           </tr>
                         ))}

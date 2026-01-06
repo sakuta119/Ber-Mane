@@ -351,6 +351,29 @@ const DailyReport = () => {
     setSaveStatus('保存中...')
 
     try {
+      // 現在保存されている経費を取得
+      const { data: existingExpenses } = await supabase
+        .from('expenses')
+        .select('id')
+        .eq('date', selectedDate)
+        .eq('store_id', selectedStore)
+
+      // 編集欄にある経費のIDセット
+      const expenseIdsInEditing = new Set(expenses.filter(exp => exp.id).map(exp => exp.id))
+
+      // 削除する経費（既存の経費で編集欄に含まれていないもの）
+      const expenseIdsToDelete = (existingExpenses || [])
+        .filter(exp => !expenseIdsInEditing.has(exp.id))
+        .map(exp => exp.id)
+
+      // 削除処理
+      if (expenseIdsToDelete.length > 0) {
+        await supabase
+          .from('expenses')
+          .delete()
+          .in('id', expenseIdsToDelete)
+      }
+
       // 経費データの保存
       const expensePromises = expenses.map(expense => {
         if (expense.id) {
@@ -502,6 +525,22 @@ const DailyReport = () => {
         }
       }
 
+      // 経費データを再読み込み（削除後の最新データを取得）
+      const { data: updatedExpenseData } = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('date', selectedDate)
+        .eq('store_id', selectedStore)
+
+      // 再読み込みした経費データを表示用に更新
+      if (updatedExpenseData) {
+        setExpenses([])
+        setSavedExpensesDisplay(mapExpensesForDisplay(updatedExpenseData))
+      } else {
+        setExpenses([])
+        setSavedExpensesDisplay([])
+      }
+
       // 全スタッフの合計を計算
       const totalSales = allStaffResults.reduce((sum, result) => sum + (result.sales_amount || 0), 0)
       const totalCredit = allStaffResults.reduce((sum, result) => sum + (result.credit_amount || 0), 0)
@@ -509,9 +548,8 @@ const DailyReport = () => {
       const totalGroups = allStaffResults.reduce((sum, result) => sum + (Number(result.groups) || 0), 0)
       const totalCustomers = allStaffResults.reduce((sum, result) => sum + (Number(result.customers) || 0), 0)
       const totalShisha = allStaffResults.reduce((sum, result) => sum + (result.shisha_count || 0), 0)
-      const totalExpense = expenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0)
-      const savedExpenseTotal = savedExpensesDisplay.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0)
-      const totalExpenseAmount = totalExpense + savedExpenseTotal
+      // 経費合計は再読み込みしたデータから計算
+      const totalExpenseAmount = (updatedExpenseData || []).reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0)
 
       // 日報データの保存（全スタッフの合計値を保存）
       const { data: reportData, error: reportError } = await supabase
@@ -796,6 +834,29 @@ const DailyReport = () => {
         onSave={async () => {
           try {
             const totalExpense = expenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0)
+            
+            // 現在保存されている経費を取得
+            const { data: existingExpenses } = await supabase
+              .from('expenses')
+              .select('id')
+              .eq('date', selectedDate)
+              .eq('store_id', selectedStore)
+
+            // 編集欄にある経費のIDセット
+            const expenseIdsInEditing = new Set(expenses.filter(exp => exp.id).map(exp => exp.id))
+
+            // 削除する経費（既存の経費で編集欄に含まれていないもの）
+            const expenseIdsToDelete = (existingExpenses || [])
+              .filter(exp => !expenseIdsInEditing.has(exp.id))
+              .map(exp => exp.id)
+
+            // 削除処理
+            if (expenseIdsToDelete.length > 0) {
+              await supabase
+                .from('expenses')
+                .delete()
+                .in('id', expenseIdsToDelete)
+            }
             
             // 経費データの保存
             const expensePromises = expenses.map(expense => {
