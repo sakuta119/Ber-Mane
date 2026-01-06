@@ -373,7 +373,7 @@ const DailyReport = () => {
 
       await Promise.all(expensePromises)
 
-      // スタッフの日次実績を保存（スタッフが選択されている AND 何か数値が入力されている場合のみ）
+      // スタッフの日次実績を保存（スタッフが選択されている AND 何か値が入力されている場合のみ）
       if (selectedStaffId) {
         const salesAmount = parseFloat(salesData.salesAmount) || 0
         const creditAmount = parseFloat(salesData.creditAmount) || 0
@@ -382,17 +382,19 @@ const DailyReport = () => {
         const customers = parseFloat(salesData.customers) || 0
         const baseSalary = calculateSalary()
 
-        // 何か数値が入力されているかチェック
-        const hasData = salesAmount > 0 || 
-                       creditAmount > 0 || 
-                       shishaCount > 0 || 
-                       groups > 0 || 
-                       customers > 0 || 
-                       baseSalary > 0 ||
-                       parseFloat(salaryData.champagneDeduction) > 0 ||
-                       (combinedMemo && combinedMemo.trim().length > 0)
+        // 何か値が入力されているかチェック（0も有効な値として扱う、全てが未入力の場合は保存しない）
+        const hasInput = (salesData.salesAmount !== '' && salesData.salesAmount !== null && salesData.salesAmount !== undefined) ||
+                        (salesData.creditAmount !== '' && salesData.creditAmount !== null && salesData.creditAmount !== undefined) ||
+                        (salesData.shishaCount !== '' && salesData.shishaCount !== null && salesData.shishaCount !== undefined) ||
+                        (salesData.groups !== '' && salesData.groups !== null && salesData.groups !== undefined) ||
+                        (salesData.customers !== '' && salesData.customers !== null && salesData.customers !== undefined) ||
+                        (salaryData.baseSalary !== '' && salaryData.baseSalary !== null && salaryData.baseSalary !== undefined) ||
+                        (salaryData.champagneDeduction !== '' && salaryData.champagneDeduction !== null && salaryData.champagneDeduction !== undefined) ||
+                        (combinedMemo && combinedMemo.trim().length > 0) ||
+                        // 給与が自動算出されている場合（売上が入力されている場合）
+                        (selectedStore !== '202' && salesAmount > 0)
 
-        if (hasData) {
+        if (hasInput) {
           const deduction = parseFloat(salaryData.champagneDeduction) || 0
           const paidSalary = calculatePaidSalary()
           // 端数切捨ては給与額（シャンパン天引額を引く前）の下三桁のみ
@@ -451,17 +453,19 @@ const DailyReport = () => {
         const customers = parseFloat(salesData.customers) || 0
         const baseSalary = calculateSalary()
 
-        // 何か数値が入力されているかチェック
-        const hasData = salesAmount > 0 || 
-                       creditAmount > 0 || 
-                       shishaCount > 0 || 
-                       groups > 0 || 
-                       customers > 0 || 
-                       baseSalary > 0 ||
-                       parseFloat(salaryData.champagneDeduction) > 0 ||
-                       (combinedMemo && combinedMemo.trim().length > 0)
+        // 何か値が入力されているかチェック（0も有効な値として扱う、全てが未入力の場合は保存しない）
+        const hasInput = (salesData.salesAmount !== '' && salesData.salesAmount !== null && salesData.salesAmount !== undefined) ||
+                        (salesData.creditAmount !== '' && salesData.creditAmount !== null && salesData.creditAmount !== undefined) ||
+                        (salesData.shishaCount !== '' && salesData.shishaCount !== null && salesData.shishaCount !== undefined) ||
+                        (salesData.groups !== '' && salesData.groups !== null && salesData.groups !== undefined) ||
+                        (salesData.customers !== '' && salesData.customers !== null && salesData.customers !== undefined) ||
+                        (salaryData.baseSalary !== '' && salaryData.baseSalary !== null && salaryData.baseSalary !== undefined) ||
+                        (salaryData.champagneDeduction !== '' && salaryData.champagneDeduction !== null && salaryData.champagneDeduction !== undefined) ||
+                        (combinedMemo && combinedMemo.trim().length > 0) ||
+                        // 給与が自動算出されている場合（売上が入力されている場合）
+                        (selectedStore !== '202' && salesAmount > 0)
 
-        if (hasData) {
+        if (hasInput) {
           const currentStaffResult = allStaffResults.find(r => r.staff_id === selectedStaffId)
           if (!currentStaffResult) {
             // まだ保存されていない場合は、現在の入力値を含める
