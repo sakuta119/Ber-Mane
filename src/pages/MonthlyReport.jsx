@@ -1366,11 +1366,12 @@ const MonthlyReport = () => {
             ) : reports.length === 0 ? (
               <p className="text-center text-gray-500 py-4">データがありません</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[960px] border-collapse overflow-hidden rounded-lg">
+              <div>
+                <div className="overflow-x-auto" style={{ position: 'relative' }}>
+                  <table className="w-full min-w-[960px] border-collapse" style={{ position: 'relative' }}>
                   <thead>
                     <tr style={{ backgroundColor: 'var(--accent)', color: 'var(--header-bg)' }}>
-                      <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200">日付</th>
+                      <th className="px-2 py-2 text-center text-sm font-semibold border-r border-yellow-200 sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.1)]" style={{ backgroundColor: 'var(--accent)', minWidth: '90px', maxWidth: '90px', width: '90px' }}>日付</th>
                       <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">組数</th>
                       <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">人数</th>
                       {selectedStore === 'TEPPEN' ? null : (
@@ -1418,7 +1419,7 @@ const MonthlyReport = () => {
                         key={`${report.date}-${report.store_id}-${index}`}
                         className={`border-b border-gray-200 ${index % 2 === 0 ? 'bg-surface' : 'bg-surface-alt'}`}
                       >
-                          <td className="px-3 py-2 text-sm text-gray-900 border-r border-gray-200">{dateLabel}</td>
+                          <td className="px-2 py-2 text-sm text-gray-900 border-r border-gray-200 sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.1)] text-center" style={{ backgroundColor: index % 2 === 0 ? 'var(--surface)' : 'var(--surface-alt)', minWidth: '90px', maxWidth: '90px', width: '90px' }}>{dateLabel}</td>
                           <td className="px-3 py-2 text-sm text-gray-700 text-right border-r border-gray-200">
                             <ValueWithUnit value={groupsValue} unit="組" />
                           </td>
@@ -1458,6 +1459,7 @@ const MonthlyReport = () => {
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
           </div>
@@ -1500,7 +1502,7 @@ const MonthlyReport = () => {
         </div>
       </div>
 
-    <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-default p-4 shadow-lg transition-colors">
+    <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-default p-4 shadow-lg transition-colors z-50">
       <button
         onClick={handleSave}
         disabled={isSaving}

@@ -961,7 +961,7 @@ const DailyReport = () => {
       />
 
       {/* 保存ボタン */}
-      <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-default p-4 shadow-lg transition-colors">
+      <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-default p-4 shadow-lg transition-colors z-50">
         <button
           onClick={handleSave}
           disabled={isSaving}

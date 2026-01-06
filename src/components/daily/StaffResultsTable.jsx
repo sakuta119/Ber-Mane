@@ -32,11 +32,12 @@ const StaffResultsTable = ({
       <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: '#00001C' }}>
         <h3 className="text-lg font-semibold" style={{ color: '#FCAF17' }}>スタッフ実績</h3>
       </div>
-      <div className="p-4 overflow-x-auto">
-        <table className="w-full min-w-[960px] border-collapse overflow-hidden rounded-lg">
+      <div className="p-4">
+        <div className="overflow-x-auto" style={{ position: 'relative' }}>
+          <table className="w-full min-w-[960px] border-collapse" style={{ position: 'relative' }}>
           <thead>
             <tr style={{ backgroundColor: '#FCAF17', color: '#00001C' }}>
-              <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">スタッフ名</th>
+              <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap sticky left-0 z-20 bg-[#FCAF17] shadow-[2px_0_4px_rgba(0,0,0,0.1)]" style={{ backgroundColor: '#FCAF17' }}>スタッフ名</th>
               <th className="px-3 py-2 text-center border-r border-yellow-200 whitespace-nowrap">
                 <div className="flex flex-col items-center text-xs font-semibold leading-tight">
                   <span>勤務</span>
@@ -80,7 +81,7 @@ const StaffResultsTable = ({
                 key={result.id || index}
                 className={`border-b border-gray-200 ${index % 2 === 0 ? 'bg-surface' : 'bg-surface-alt'}`}
               >
-                <td className="px-3 py-2 text-sm font-medium text-gray-900 border-r border-gray-200">
+                <td className="px-3 py-2 text-sm font-medium text-gray-900 border-r border-gray-200 sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.1)]" style={{ backgroundColor: index % 2 === 0 ? 'var(--surface)' : 'var(--surface-alt)', minWidth: '120px' }}>
                   <span className="block text-center">{getStaffName(result.staff_id)}</span>
                 </td>
                 <td className="px-3 py-2 text-sm text-gray-700 text-right border-r border-gray-200 whitespace-nowrap">
@@ -146,6 +147,7 @@ const StaffResultsTable = ({
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )

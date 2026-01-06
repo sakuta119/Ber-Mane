@@ -356,11 +356,12 @@ const StaffPerformance = () => {
           ) : performanceData.length === 0 ? (
             <p className="text-center text-gray-500 py-4">データがありません</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse overflow-hidden rounded-lg">
+            <div>
+              <div className="overflow-x-auto" style={{ position: 'relative' }}>
+                <table className="w-full border-collapse" style={{ position: 'relative' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#FCAF17', color: '#00001C' }}>
-                    <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">
+                    <th className="px-2 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.1)]" style={{ backgroundColor: '#FCAF17', minWidth: '90px', maxWidth: '90px', width: '90px' }}>
                       日付
                     </th>
                     <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">
@@ -403,7 +404,7 @@ const StaffPerformance = () => {
                         key={data.id || index}
                         className={`border-b border-gray-200 ${index % 2 === 0 ? 'bg-surface' : 'bg-surface-alt'}`}
                       >
-                        <td className="px-3 py-2 text-sm text-gray-900 text-center border-r border-gray-200">
+                        <td className="px-2 py-2 text-sm text-gray-900 text-center border-r border-gray-200 sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.1)]" style={{ backgroundColor: index % 2 === 0 ? 'var(--surface)' : 'var(--surface-alt)', minWidth: '90px', maxWidth: '90px', width: '90px' }}>
                           {format(new Date(data.date + 'T00:00:00'), 'M/d(E)', { locale: ja })}
                         </td>
                         <td className="px-3 py-2 text-sm text-gray-900 text-center border-r border-gray-200">
@@ -455,6 +456,7 @@ const StaffPerformance = () => {
                   })}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
           </div>
