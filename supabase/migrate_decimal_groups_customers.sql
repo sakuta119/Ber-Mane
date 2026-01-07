@@ -11,3 +11,4 @@ ALTER TABLE staff_daily_results
 ALTER COLUMN groups TYPE NUMERIC(10, 2) USING groups::NUMERIC(10, 2),
 ALTER COLUMN customers TYPE NUMERIC(10, 2) USING customers::NUMERIC(10, 2);
 
+

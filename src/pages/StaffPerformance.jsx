@@ -358,7 +358,7 @@ const StaffPerformance = () => {
           ) : (
             <div>
               <div className="overflow-x-auto" style={{ position: 'relative' }}>
-                <table className="w-full border-collapse" style={{ position: 'relative' }}>
+                <table className="w-full min-w-[960px] border-collapse" style={{ position: 'relative' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#FCAF17', color: '#00001C' }}>
                     <th className="px-2 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.1)]" style={{ backgroundColor: '#FCAF17', minWidth: '90px', maxWidth: '90px', width: '90px' }}>

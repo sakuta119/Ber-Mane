@@ -958,6 +958,7 @@ const DailyReport = () => {
         staffs={staffs}
         store={selectedStore}
         onDelete={handleDeleteStaffResult}
+        showWorkDays={false}
       />
 
       {/* 保存ボタン */}
