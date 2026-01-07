@@ -325,6 +325,17 @@ const DailyReport = () => {
     }
 
     try {
+      // 削除する前に、そのスタッフの日付と店舗IDを取得
+      const { data: staffResultToDelete } = await supabase
+        .from('staff_daily_results')
+        .select('date, store_id')
+        .eq('id', resultId)
+        .maybeSingle()
+
+      const deleteDate = staffResultToDelete?.date
+      const deleteStoreId = staffResultToDelete?.store_id
+
+      // スタッフ実績を削除
       const { error } = await supabase
         .from('staff_daily_results')
         .delete()
@@ -336,8 +347,107 @@ const DailyReport = () => {
         return
       }
 
+      // 削除したスタッフが現在選択されているスタッフと同じ場合、入力フィールドをクリア
+      if (selectedStaffId === staffId) {
+        setSalesData({
+          groups: '',
+          customers: '',
+          salesAmount: '',
+          creditAmount: '',
+          shishaCount: ''
+        })
+        setSalaryData({
+          baseSalary: '',
+          champagneDeduction: ''
+        })
+        setCombinedMemo('')
+      }
+
       // スタッフ実績データを再読み込み
       await loadStaffResults()
+      
+      // 削除したスタッフが現在選択されている場合、そのスタッフのデータを再読み込み
+      if (selectedStaffId === staffId) {
+        await loadStaffData(staffId)
+      }
+
+      // 削除した日付・店舗のdaily_reportsの合計値を更新
+      if (deleteDate && deleteStoreId) {
+        // 削除後のその日の全スタッフ実績を取得
+        const { data: remainingStaffResults, error: staffResultsError } = await supabase
+          .from('staff_daily_results')
+          .select('*')
+          .eq('date', deleteDate)
+          .eq('store_id', deleteStoreId)
+
+        if (staffResultsError) {
+          console.error('Error loading remaining staff results:', staffResultsError)
+        } else {
+          // 全スタッフの合計値を計算
+          const totalSales = (remainingStaffResults || []).reduce((sum, result) => sum + (result.sales_amount || 0), 0)
+          const totalCredit = (remainingStaffResults || []).reduce((sum, result) => sum + (result.credit_amount || 0), 0)
+          const totalSalary = (remainingStaffResults || []).reduce((sum, result) => sum + (result.base_salary || 0), 0)
+          const totalGroups = (remainingStaffResults || []).reduce((sum, result) => sum + (Number(result.groups) || 0), 0)
+          const totalCustomers = (remainingStaffResults || []).reduce((sum, result) => sum + (Number(result.customers) || 0), 0)
+          const totalShisha = (remainingStaffResults || []).reduce((sum, result) => sum + (result.shisha_count || 0), 0)
+
+          // 経費合計を取得
+          const { data: expenseData } = await supabase
+            .from('expenses')
+            .select('amount')
+            .eq('date', deleteDate)
+            .eq('store_id', deleteStoreId)
+
+          const totalExpenseAmount = (expenseData || []).reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0)
+
+          // 既存のdaily_reportsを取得（opinionとmemoを保持するため）
+          const { data: existingReport } = await supabase
+            .from('daily_reports')
+            .select('opinion, memo')
+            .eq('date', deleteDate)
+            .eq('store_id', deleteStoreId)
+            .maybeSingle()
+
+          // daily_reportsを更新（合計値が0の場合でも、他のデータがあれば残す）
+          const { error: reportUpdateError } = await supabase
+            .from('daily_reports')
+            .upsert({
+              date: deleteDate,
+              store_id: deleteStoreId,
+              total_sales_amount: totalSales,
+              credit_amount: totalCredit,
+              total_groups: totalGroups,
+              total_customers: totalCustomers,
+              total_shisha: totalShisha,
+              total_salary_amount: totalSalary,
+              total_expense_amount: totalExpenseAmount,
+              memo: existingReport?.memo || '',
+              opinion: existingReport?.opinion || ''
+            }, {
+              onConflict: 'date,store_id'
+            })
+
+          if (reportUpdateError) {
+            console.error('Error updating daily report after deletion:', reportUpdateError)
+          }
+
+          // すべての合計値が0で、opinionもmemoもない場合、daily_reportsを削除
+          if (totalSales === 0 && totalCredit === 0 && totalSalary === 0 && totalGroups === 0 && 
+              totalCustomers === 0 && totalShisha === 0 && totalExpenseAmount === 0 &&
+              !existingReport?.opinion && !existingReport?.memo) {
+            const { error: deleteReportError } = await supabase
+              .from('daily_reports')
+              .delete()
+              .eq('date', deleteDate)
+              .eq('store_id', deleteStoreId)
+
+            if (deleteReportError) {
+              console.error('Error deleting empty daily report:', deleteReportError)
+            }
+          }
+        }
+      }
+      
       setStatusMessage('スタッフ実績を削除しました')
       setTimeout(() => setStatusMessage(''), 3000)
     } catch (error) {
@@ -551,47 +661,66 @@ const DailyReport = () => {
       // 経費合計は再読み込みしたデータから計算
       const totalExpenseAmount = (updatedExpenseData || []).reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0)
 
-      // 日報データの保存（全スタッフの合計値を保存）
-      const { data: reportData, error: reportError } = await supabase
-        .from('daily_reports')
-        .upsert({
-          date: selectedDate,
-          store_id: selectedStore,
-          total_sales_amount: totalSales,
-          credit_amount: totalCredit,
-          total_groups: totalGroups,
-          total_customers: totalCustomers,
-          total_shisha: totalShisha,
-          total_salary_amount: totalSalary,
-          total_expense_amount: totalExpenseAmount,
-          memo: combinedMemo,
-          opinion: opinion
-        }, {
-          onConflict: 'date,store_id'
-        })
-        .select()
-        .maybeSingle()
+      // スタッフ実績が1件も存在しない場合、またはすべての合計値が0で、経費もなく、opinionもmemoもない場合はdaily_reportsを削除
+      const hasNoStaffResults = allStaffResults.length === 0
+      const hasNoData = totalSales === 0 && totalCredit === 0 && totalSalary === 0 && 
+                       totalGroups === 0 && totalCustomers === 0 && totalShisha === 0 && 
+                       totalExpenseAmount === 0 && !opinion && !combinedMemo
 
-      if (reportError) {
-        console.error('Error saving daily report:', reportError)
-        console.error('Save data:', {
-          date: selectedDate,
-          store_id: selectedStore,
-          total_sales_amount: totalSales,
-          credit_amount: totalCredit,
-          total_groups: totalGroups,
-          total_customers: totalCustomers,
-          total_shisha: totalShisha,
-          total_salary_amount: totalSalary,
-          total_expense_amount: totalExpenseAmount
-        })
-        throw reportError
-      }
+      if (hasNoStaffResults || hasNoData) {
+        // daily_reportsを削除
+        const { error: deleteError } = await supabase
+          .from('daily_reports')
+          .delete()
+          .eq('date', selectedDate)
+          .eq('store_id', selectedStore)
 
-      if (reportData) {
-        console.log('Daily report saved successfully:', reportData)
+        if (deleteError) {
+          console.error('Error deleting empty daily report:', deleteError)
+        }
       } else {
-        console.warn('Daily report save returned no data')
+        // 日報データの保存（全スタッフの合計値を保存）
+        const { data: reportData, error: reportError } = await supabase
+          .from('daily_reports')
+          .upsert({
+            date: selectedDate,
+            store_id: selectedStore,
+            total_sales_amount: totalSales,
+            credit_amount: totalCredit,
+            total_groups: totalGroups,
+            total_customers: totalCustomers,
+            total_shisha: totalShisha,
+            total_salary_amount: totalSalary,
+            total_expense_amount: totalExpenseAmount,
+            memo: combinedMemo,
+            opinion: opinion
+          }, {
+            onConflict: 'date,store_id'
+          })
+          .select()
+          .maybeSingle()
+
+        if (reportError) {
+          console.error('Error saving daily report:', reportError)
+          console.error('Save data:', {
+            date: selectedDate,
+            store_id: selectedStore,
+            total_sales_amount: totalSales,
+            credit_amount: totalCredit,
+            total_groups: totalGroups,
+            total_customers: totalCustomers,
+            total_shisha: totalShisha,
+            total_salary_amount: totalSalary,
+            total_expense_amount: totalExpenseAmount
+          })
+          throw reportError
+        }
+
+        if (reportData) {
+          console.log('Daily report saved successfully:', reportData)
+        } else {
+          console.warn('Daily report save returned no data')
+        }
       }
 
       setSaveStatus('保存完了')
