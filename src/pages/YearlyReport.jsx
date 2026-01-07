@@ -251,14 +251,36 @@ const YearlyReport = () => {
 
   const loadStaffs = async () => {
     try {
+      // スタッフ一覧を取得（削除済みスタッフも含む。実績データの表示に必要）
       const { data, error } = await supabase
         .from('staffs')
         .select('*')
-        .eq('is_active', true)
         .order('id')
 
       if (error) throw error
-      setStaffs(data || [])
+      
+      // 重複を除去（同じ名前のスタッフが複数ある場合、IDが大きいものを優先）
+      if (data && data.length > 0) {
+        const uniqueStaffs = []
+        const nameMap = new Map()
+        
+        // IDの降順でソートして、同じ名前の場合は最初に見つかったもの（IDが大きいもの）を優先
+        const sortedData = [...data].sort((a, b) => b.id - a.id)
+        
+        for (const staff of sortedData) {
+          if (!nameMap.has(staff.name)) {
+            nameMap.set(staff.name, true)
+            uniqueStaffs.push(staff)
+          }
+        }
+        
+        // IDの昇順でソートし直す
+        uniqueStaffs.sort((a, b) => a.id - b.id)
+        
+        setStaffs(uniqueStaffs)
+      } else {
+        setStaffs([])
+      }
     } catch (err) {
       console.error('Error loading staffs:', err)
       setStaffs([])

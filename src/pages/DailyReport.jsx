@@ -67,18 +67,35 @@ const DailyReport = () => {
 
   const loadStaffs = async () => {
     try {
-      // 初期スタッフを登録
-      // スタッフ一覧を取得
+      // スタッフ一覧を取得（削除済みスタッフも含む。実績データの表示に必要）
       const { data, error } = await supabase
         .from('staffs')
         .select('*')
-        .eq('is_active', true)
         .order('id')
 
       if (!error && data) {
-        setStaffs(data)
-        if (data.length > 0 && !selectedStaffId) {
-          setSelectedStaffId(data[0].id)
+        // 重複を除去（同じ名前のスタッフが複数ある場合、IDが大きいものを優先）
+        const uniqueStaffs = []
+        const nameMap = new Map()
+        
+        // IDの降順でソートして、同じ名前の場合は最初に見つかったもの（IDが大きいもの）を優先
+        const sortedData = [...data].sort((a, b) => b.id - a.id)
+        
+        for (const staff of sortedData) {
+          if (!nameMap.has(staff.name)) {
+            nameMap.set(staff.name, true)
+            uniqueStaffs.push(staff)
+          }
+        }
+        
+        // IDの昇順でソートし直す
+        uniqueStaffs.sort((a, b) => a.id - b.id)
+        
+        setStaffs(uniqueStaffs)
+        // 初期選択はアクティブなスタッフの最初の1人
+        const activeStaff = uniqueStaffs.find(s => s.is_active !== false)
+        if (activeStaff && !selectedStaffId) {
+          setSelectedStaffId(activeStaff.id)
         }
       }
     } catch (error) {
@@ -273,10 +290,12 @@ const DailyReport = () => {
     }
     
     // 次のスタッフを選択（現在選択されているスタッフの次、または最初のスタッフ）
+    // アクティブなスタッフのみを対象とする
     let nextStaffId = null
     if (staffs.length > 0) {
       const filteredStaffs = staffs.filter(staff => 
-        !staff.store_ids || staff.store_ids.length === 0 || staff.store_ids.includes(selectedStore)
+        (staff.is_active !== false) &&
+        (!staff.store_ids || staff.store_ids.length === 0 || staff.store_ids.includes(selectedStore))
       )
       if (filteredStaffs.length > 0) {
         const currentIndex = selectedStaffId 
@@ -729,10 +748,11 @@ const DailyReport = () => {
       // スタッフ実績データを再読み込み（表示を更新するため）
       await loadStaffResults()
       
-      // スタッフが選択されていない場合、次のスタッフを自動選択
+      // スタッフが選択されていない場合、次のスタッフを自動選択（アクティブなスタッフのみ）
       if (!selectedStaffId && staffs.length > 0) {
         const filteredStaffs = staffs.filter(staff => 
-          !staff.store_ids || staff.store_ids.length === 0 || staff.store_ids.includes(selectedStore)
+          (staff.is_active !== false) &&
+          (!staff.store_ids || staff.store_ids.length === 0 || staff.store_ids.includes(selectedStore))
         )
         if (filteredStaffs.length > 0) {
           setSelectedStaffId(filteredStaffs[0].id)

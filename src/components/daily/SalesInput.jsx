@@ -27,7 +27,10 @@ const SalesInput = ({ data, onChange, store, staffs, selectedStaffId, onStaffCha
           >
             <option value="">選択してください</option>
             {staffs
-              .filter(staff => !staff.store_ids || staff.store_ids.length === 0 || staff.store_ids.includes(store))
+              .filter(staff => 
+                (staff.is_active !== false) && 
+                (!staff.store_ids || staff.store_ids.length === 0 || staff.store_ids.includes(store))
+              )
               .map(staff => (
                 <option key={staff.id} value={staff.id}>
                   {staff.name}
