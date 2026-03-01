@@ -491,12 +491,27 @@ const DailyReport = () => {
     }, 0)
   }
 
-  const handleRemoveExpense = (expense) => {
+  const handleRemoveExpense = async (expense) => {
     if (!expense?.id) return
     setDeletedExpenseIds((prev) => {
       if (prev.includes(expense.id)) return prev
       return [...prev, expense.id]
     })
+
+    try {
+      const { error } = await supabase
+        .from('expenses')
+        .delete()
+        .eq('id', expense.id)
+
+      if (error) throw error
+
+      setSavedExpensesDisplay((prev) => prev.filter((item) => item.id !== expense.id))
+    } catch (error) {
+      console.error('Error deleting expense:', error)
+      setStatusMessage('経費の削除エラー')
+      setTimeout(() => setStatusMessage(''), 3000)
+    }
   }
 
   const handleDeleteStaffResult = async (resultId, staffId) => {

@@ -52,10 +52,10 @@ const ExpenseInput = ({
     onChange([...expenses, { id: null, name: '', amount: '', note: '' }])
   }
 
-  const handleRemoveExpense = (index) => {
+  const handleRemoveExpense = async (index) => {
     const target = expenses[index]
     if (target) {
-      onRemoveExpense(target)
+      await onRemoveExpense(target)
     }
     onChange(expenses.filter((_, i) => i !== index))
   }
