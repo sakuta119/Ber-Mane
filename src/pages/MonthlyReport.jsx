@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { format, endOfMonth, subMonths } from 'date-fns'
+import { format, endOfMonth, subMonths, startOfMonth, startOfWeek, addDays, isSameMonth } from 'date-fns'
 import ja from 'date-fns/locale/ja'
 import { supabase } from '../lib/supabase'
 import StaffResultsTable from '../components/daily/StaffResultsTable'
@@ -72,8 +72,6 @@ const MonthlyReport = () => {
   const [savedStaffMemos, setSavedStaffMemos] = useState({})
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
-  const [expenseSaveState, setExpenseSaveState] = useState('idle') // idle | saving | success | error
-  const [editingExpenseIds, setEditingExpenseIds] = useState(new Set()) // 編集欄にある経費IDのセット
 
   useEffect(() => {
     loadStaffs()
@@ -165,20 +163,8 @@ const MonthlyReport = () => {
 
       if (error) throw error
 
-      // 各スタッフの勤務日数を計算（組数が入力されている日数をカウント）
-      const workDaysMap = {}
       const aggregatedMap = (data || []).reduce((acc, current) => {
         const key = current.staff_id
-        
-        // 勤務日数のカウント（組数が入力されている日）
-        if (!workDaysMap[key]) {
-          workDaysMap[key] = new Set()
-        }
-        const groupsValue = current.groups != null ? Number(current.groups) : 0
-        if (groupsValue > 0 || current.groups != null) {
-          workDaysMap[key].add(current.date)
-        }
-        
         if (!acc[key]) {
           acc[key] = {
             id: key,
@@ -191,16 +177,15 @@ const MonthlyReport = () => {
             base_salary: 0,
             champagne_deduction: 0,
             paid_salary: 0,
-            fraction_cut: 0,
-            work_days: 0
+            fraction_cut: 0
           }
         }
 
         acc[key].sales_amount += current.sales_amount || 0
         acc[key].credit_amount += current.credit_amount || 0
         acc[key].shisha_count += current.shisha_count || 0
-        acc[key].groups += Number(current.groups) || 0
-        acc[key].customers += Number(current.customers) || 0
+        acc[key].groups += current.groups || 0
+        acc[key].customers += current.customers || 0
         acc[key].base_salary += current.base_salary || 0
         acc[key].champagne_deduction += current.champagne_deduction || 0
         acc[key].paid_salary += current.paid_salary || 0
@@ -208,11 +193,6 @@ const MonthlyReport = () => {
 
         return acc
       }, {})
-
-      // 勤務日数を設定
-      Object.keys(aggregatedMap).forEach(staffId => {
-        aggregatedMap[staffId].work_days = workDaysMap[staffId]?.size || 0
-      })
 
       const aggregatedResults = Object.values(aggregatedMap).sort((a, b) => a.staff_id - b.staff_id)
       setStaffMonthlyResults(aggregatedResults)
@@ -256,36 +236,14 @@ const MonthlyReport = () => {
 
   const loadStaffs = async () => {
     try {
-      // スタッフ一覧を取得（削除済みスタッフも含む。実績データの表示に必要）
       const { data, error } = await supabase
         .from('staffs')
         .select('*')
+        .eq('is_active', true)
         .order('id')
 
       if (error) throw error
-      
-      // 重複を除去（同じ名前のスタッフが複数ある場合、IDが大きいものを優先）
-      if (data && data.length > 0) {
-        const uniqueStaffs = []
-        const nameMap = new Map()
-        
-        // IDの降順でソートして、同じ名前の場合は最初に見つかったもの（IDが大きいもの）を優先
-        const sortedData = [...data].sort((a, b) => b.id - a.id)
-        
-        for (const staff of sortedData) {
-          if (!nameMap.has(staff.name)) {
-            nameMap.set(staff.name, true)
-            uniqueStaffs.push(staff)
-          }
-        }
-        
-        // IDの昇順でソートし直す
-        uniqueStaffs.sort((a, b) => a.id - b.id)
-        
-        setStaffs(uniqueStaffs)
-      } else {
-        setStaffs([])
-      }
+      setStaffs(data || [])
     } catch (err) {
       console.error('Error loading staffs:', err)
       setStaffs([])
@@ -420,12 +378,9 @@ const MonthlyReport = () => {
       })
 
       setMonthlyExpensesByStore(grouped)
-      // データを再読み込みしたら編集状態をクリア
-      setEditingExpenseIds(new Set())
     } catch (err) {
       console.error('Error loading monthly manual expenses:', err)
       setMonthlyExpensesByStore(createInitialMonthlyExpenses())
-      setEditingExpenseIds(new Set())
     }
   }
 
@@ -452,6 +407,60 @@ const MonthlyReport = () => {
       setSavedStaffMemos({})
     }
   }
+
+  const summary = useMemo(() => {
+    if (!reports || reports.length === 0) {
+      return {
+        totalSales: 0,
+        totalCredit: 0,
+        totalExpense: 0,
+        totalSalary: 0,
+        totalGroups: 0,
+        totalCustomers: 0,
+        totalShisha: 0,
+        totalBalance: 0,
+        daysCount: 0
+      }
+    }
+
+    const totals = reports.reduce(
+      (acc, report) => {
+        acc.totalSales += report.total_sales_amount || 0
+        acc.totalCredit += report.credit_amount || 0
+        acc.totalExpense += report.total_expense_amount || 0
+        acc.totalSalary += report.total_salary_amount || 0
+        acc.totalGroups += report.total_groups || 0
+        acc.totalCustomers += report.total_customers || 0
+        acc.totalShisha += report.total_shisha || 0
+        acc.totalBalance += (report.total_sales_amount || 0) - ((report.total_expense_amount || 0) + (report.total_salary_amount || 0))
+        acc.uniqueDates.add(report.date)
+        return acc
+      },
+      {
+        totalSales: 0,
+        totalCredit: 0,
+        totalExpense: 0,
+        totalSalary: 0,
+        totalGroups: 0,
+        totalCustomers: 0,
+        totalShisha: 0,
+        totalBalance: 0,
+        uniqueDates: new Set()
+      }
+    )
+
+    return {
+      totalSales: totals.totalSales,
+      totalCredit: totals.totalCredit,
+      totalExpense: totals.totalExpense,
+      totalSalary: totals.totalSalary,
+      totalGroups: totals.totalGroups,
+      totalCustomers: totals.totalCustomers,
+      totalShisha: totals.totalShisha,
+      totalBalance: totals.totalBalance,
+      daysCount: totals.uniqueDates.size
+    }
+  }, [reports])
 
   const isAllStores = selectedStore === ALL_STORES_OPTION
 
@@ -496,125 +505,24 @@ const MonthlyReport = () => {
     }, 0)
   ), [currentFixedExpenses, isAllStores])
 
-  // 入力中の経費（local-で始まるID、またはeditingExpenseIdsに含まれるID）
-  const editingExpenseEntries = useMemo(() => {
-    if (isAllStores) {
-      return STORES.flatMap(store =>
-        (monthlyExpensesByStore[store] || [])
-          .filter(item => {
-            const itemId = item.id?.toString()
-            return itemId && (itemId.startsWith('local-') || editingExpenseIds.has(item.id))
-          })
-          .map(item => ({
-            ...item,
-            store: item.store || store
-          }))
-      )
-    }
-    return (monthlyExpensesByStore[selectedStore] || [])
-      .filter(item => {
-        const itemId = item.id?.toString()
-        return itemId && (itemId.startsWith('local-') || editingExpenseIds.has(item.id))
-      })
-      .map(item => ({
-        ...item,
-        store: item.store || selectedStore
-      }))
-  }, [isAllStores, monthlyExpensesByStore, selectedStore, editingExpenseIds])
-
-  // 登録済みの手動追加経費（local-で始まらず、editingExpenseIdsにも含まれないもの）
-  const savedManualExpenseEntries = useMemo(() => {
-    if (isAllStores) {
-      return STORES.flatMap(store =>
-        (monthlyExpensesByStore[store] || [])
-          .filter(item => {
-            const itemId = item.id?.toString()
-            return item && itemId && !itemId.startsWith('local-') && !editingExpenseIds.has(item.id)
-          })
-          .map(item => ({
-            ...item,
-            store: item.store || store
-          }))
-      )
-    }
-    return (monthlyExpensesByStore[selectedStore] || [])
-      .filter(item => {
-        const itemId = item.id?.toString()
-        return item && itemId && !itemId.startsWith('local-') && !editingExpenseIds.has(item.id)
-      })
-      .map(item => ({
-        ...item,
-        store: item.store || selectedStore
-      }))
-  }, [isAllStores, monthlyExpensesByStore, selectedStore, editingExpenseIds])
-
-  // 入力中と登録済みの両方を含む
   const manualExpenseEntries = useMemo(() => {
-    return [...editingExpenseEntries, ...savedManualExpenseEntries]
-  }, [editingExpenseEntries, savedManualExpenseEntries])
+    if (isAllStores) {
+      return STORES.flatMap(store =>
+        (monthlyExpensesByStore[store] || []).map(item => ({
+          ...item,
+          store: item.store || store
+        }))
+      )
+    }
+    return (monthlyExpensesByStore[selectedStore] || []).map(item => ({
+      ...item,
+      store: item.store || selectedStore
+    }))
+  }, [isAllStores, monthlyExpensesByStore, selectedStore])
 
   const manualExpenseTotal = useMemo(() => {
     return manualExpenseEntries.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
   }, [manualExpenseEntries])
-
-  const summary = useMemo(() => {
-    // 日報データから経費と日付を計算
-    const reportTotals = (reports || []).reduce(
-      (acc, report) => {
-        acc.totalExpense += report.total_expense_amount || 0
-        acc.uniqueDates.add(report.date)
-        return acc
-      },
-      {
-        totalExpense: 0,
-        uniqueDates: new Set()
-      }
-    )
-
-    // スタッフ実績から売上、クレカ決済、給与、組数、人数、シーシャ販売数を計算（これが最も正確）
-    const staffTotals = (staffMonthlyResults || []).reduce(
-      (acc, result) => {
-        acc.totalSales += result.sales_amount || 0
-        acc.totalCredit += result.credit_amount || 0
-        acc.totalSalary += result.base_salary || 0
-        acc.totalGroups += Number(result.groups) || 0
-        acc.totalCustomers += Number(result.customers) || 0
-        acc.totalShisha += result.shisha_count || 0
-        return acc
-      },
-      {
-        totalSales: 0,
-        totalCredit: 0,
-        totalSalary: 0,
-        totalGroups: 0,
-        totalCustomers: 0,
-        totalShisha: 0
-      }
-    )
-
-    // 固定費と手動追加経費の合計も含める
-    const fixedExpenseTotal = FIXED_EXPENSE_FIELDS.reduce((sum, field) => {
-      const value = isAllStores
-        ? currentFixedExpenses[field.key]
-        : parseFloat(currentFixedExpenses[field.key]) || 0
-      return sum + (Number(value) || 0)
-    }, 0)
-
-    const totalExpense = reportTotals.totalExpense + fixedExpenseTotal + manualExpenseTotal
-    const totalBalance = staffTotals.totalSales - (totalExpense + staffTotals.totalSalary)
-
-    return {
-      totalSales: staffTotals.totalSales,
-      totalCredit: staffTotals.totalCredit,
-      totalExpense: totalExpense,
-      totalSalary: staffTotals.totalSalary,
-      totalGroups: staffTotals.totalGroups,
-      totalCustomers: staffTotals.totalCustomers,
-      totalShisha: staffTotals.totalShisha,
-      totalBalance: totalBalance,
-      daysCount: reportTotals.uniqueDates.size
-    }
-  }, [reports, staffMonthlyResults, currentFixedExpenses, manualExpenseTotal, isAllStores])
 
   const dailyExpenseTotal = useMemo(() => (
     aggregatedDailyExpenses.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
@@ -703,6 +611,41 @@ const MonthlyReport = () => {
     ]
   }, [summary, selectedStore, isAllStores])
 
+  const dailySalesBalances = useMemo(() => {
+    if (!reports || reports.length === 0) {
+      return {}
+    }
+
+    return reports.reduce((acc, report) => {
+      const dateKey = report.date
+      if (!acc[dateKey]) {
+        acc[dateKey] = { sales: 0, expense: 0, salary: 0, balance: 0 }
+      }
+      acc[dateKey].sales += report.total_sales_amount || 0
+      acc[dateKey].expense += report.total_expense_amount || 0
+      acc[dateKey].salary += report.total_salary_amount || 0
+      acc[dateKey].balance = acc[dateKey].sales - (acc[dateKey].expense + acc[dateKey].salary)
+      return acc
+    }, {})
+  }, [reports])
+
+  const calendarWeeks = useMemo(() => {
+    const monthStart = startOfMonth(new Date(selectedYear, selectedMonth - 1, 1))
+    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 })
+    const weeks = []
+    let cursor = calendarStart
+
+    for (let w = 0; w < 6; w += 1) {
+      const days = []
+      for (let d = 0; d < 7; d += 1) {
+        days.push(cursor)
+        cursor = addDays(cursor, 1)
+      }
+      weeks.push(days)
+    }
+    return weeks
+  }, [selectedYear, selectedMonth])
+
   const years = useMemo(() => Array.from({ length: 5 }, (_, i) => today.getFullYear() - i), [today])
   const months = Array.from({ length: 12 }, (_, i) => i + 1)
 
@@ -767,109 +710,6 @@ const MonthlyReport = () => {
       ...prev,
       [storeContext]: (prev[storeContext] || []).filter(exp => exp.id !== id)
     }))
-  }
-
-  const handleSaveMonthlyExpenses = async () => {
-    setExpenseSaveState('saving')
-    try {
-      // 編集欄にある経費を保存（idがあるものは更新、ないものは新規追加）
-      const expensePromises = []
-      
-      STORES.forEach(store => {
-        (monthlyExpensesByStore[store] || []).forEach(expense => {
-          const trimmedName = expense.name?.trim() || ''
-          const trimmedNote = expense.note?.trim() || ''
-          const amountValue = parseInt(expense.amount, 10)
-          const normalizedAmount = Number.isNaN(amountValue) ? 0 : amountValue
-
-          if (!trimmedName && normalizedAmount === 0 && !trimmedNote) {
-            return
-          }
-
-          const expenseId = expense.id?.toString()
-          
-          if (expenseId && !expenseId.startsWith('local-')) {
-            // 既存の経費を更新（データベースID）
-            expensePromises.push(
-              supabase
-                .from('monthly_manual_expenses')
-                .update({
-                  name: trimmedName || '未分類',
-                  amount: normalizedAmount,
-                  note: trimmedNote || null
-                })
-                .eq('id', expense.id)
-            )
-          } else {
-            // 新規の経費を追加（local-で始まるID、またはIDがないもの）
-            expensePromises.push(
-              supabase
-                .from('monthly_manual_expenses')
-                .insert({
-                  year: selectedYear,
-                  month: selectedMonth,
-                  store_id: expense.store || store,
-                  name: trimmedName || '未分類',
-                  amount: normalizedAmount,
-                  note: trimmedNote || null
-                })
-            )
-          }
-        })
-      })
-
-      await Promise.all(expensePromises)
-
-      // 編集欄をクリア（local-で始まるIDのもののみ残す、編集済みIDもクリア）
-      setEditingExpenseIds(new Set())
-      setMonthlyExpensesByStore(prev => {
-        const cleared = {}
-        STORES.forEach(store => {
-          cleared[store] = (prev[store] || []).filter(exp => exp.id && exp.id.toString().startsWith('local-'))
-        })
-        return cleared
-      })
-
-      // 経費データを再読み込み
-      await loadMonthlyManualExpenses()
-
-      setExpenseSaveState('success')
-      setTimeout(() => setExpenseSaveState('idle'), 2000)
-    } catch (error) {
-      console.error('Error saving monthly expenses:', error)
-      setExpenseSaveState('error')
-      setTimeout(() => setExpenseSaveState('idle'), 3000)
-    }
-  }
-
-  const getExpenseSaveButtonLabel = () => {
-    switch (expenseSaveState) {
-      case 'saving':
-        return '登録中...'
-      case 'success':
-        return '登録完了'
-      case 'error':
-        return '保存エラー'
-      default:
-        return '経費を登録'
-    }
-  }
-
-  // 経費編集開始（日報と同じ方式：保存済み経費を編集欄に移動）
-  const handleEditSavedExpense = (savedExpense) => {
-    if (!savedExpense || !savedExpense.id) return
-
-    // 編集欄に追加（IDをそのまま使用、日報と同じ方式）
-    setEditingExpenseIds(prev => new Set([...prev, savedExpense.id]))
-
-    // 編集欄までスクロール
-    setTimeout(() => {
-      const element = document.getElementById(`expense-amount-${savedExpense.id}`)
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        element.focus()
-      }
-    }, 100)
   }
 
   const handleFixedExpenseChange = (store, key, value) => {
@@ -1006,8 +846,13 @@ const MonthlyReport = () => {
     }
   }
 
+  const handleAutoSave = () => {
+    if (isSaving) return
+    handleSave()
+  }
+
   return (
-    <div className="space-y-6 pb-24 text-primary">
+    <div className="space-y-6 pb-6 text-primary">
       <div className="bg-surface rounded-lg shadow border border-default overflow-hidden transition-colors">
         <div
           className="flex items-center justify-between px-4 py-3"
@@ -1105,6 +950,67 @@ const MonthlyReport = () => {
           className="flex items-center justify-between px-4 py-3"
           style={{ backgroundColor: 'var(--header-bg)' }}
         >
+          <h3 className="text-lg font-semibold text-accent">日別収支カレンダー</h3>
+        </div>
+        <div className="p-4">
+          <div className="grid grid-cols-7 text-center text-xs font-semibold text-gray-600 mb-2">
+            {['日', '月', '火', '水', '木', '金', '土'].map((label) => (
+              <div key={`weekday-${label}`} className="py-1">{label}</div>
+            ))}
+          </div>
+          <div className="space-y-2">
+            {calendarWeeks.map((week, weekIndex) => (
+              <div key={`week-${weekIndex}`} className="grid grid-cols-7 gap-2">
+                {week.map((day) => {
+                  const dateKey = format(day, 'yyyy-MM-dd')
+                  const data = dailySalesBalances[dateKey]
+                  const inMonth = isSameMonth(day, new Date(selectedYear, selectedMonth - 1, 1))
+                  const balanceValue = data?.balance ?? 0
+                  const salesValue = data?.sales ?? 0
+                  const hasData = Boolean(data)
+                  const cellClassName = inMonth
+                    ? (hasData ? 'bg-[#2c2c2c]' : 'bg-surface')
+                    : 'bg-surface-alt text-gray-400'
+                  return (
+                    <div
+                      key={dateKey}
+                      className={`rounded-md border p-2 min-h-[84px] ${cellClassName}`}
+                      style={{ borderColor: 'var(--border-color)' }}
+                    >
+                      <div className="flex items-center justify-between text-xs font-semibold mb-1">
+                        <span>{format(day, 'd')}</span>
+                      </div>
+                      {data ? (
+                        <div className="space-y-1">
+                          <div className="text-[11px] text-gray-500">
+                            売上: <ValueWithUnit value={salesValue} unit="円" />
+                          </div>
+                          <div className="text-[11px]">
+                            収支: <ValueWithUnit
+                              value={balanceValue}
+                              unit="円"
+                              showSign
+                              valueClassName={balanceValue >= 0 ? 'text-accent' : 'text-red-600'}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-gray-400">-</div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-surface rounded-lg shadow border border-default overflow-hidden transition-colors">
+        <div
+          className="flex items-center justify-between px-4 py-3"
+          style={{ backgroundColor: 'var(--header-bg)' }}
+        >
           <h3 className="text-lg font-semibold text-accent">経費</h3>
           <button
             onClick={handleAddMonthlyExpense}
@@ -1154,6 +1060,7 @@ const MonthlyReport = () => {
                       inputMode="numeric"
                       value={currentFixedExpenses[field.key]}
                       onChange={(e) => handleFixedExpenseChange(selectedStore, field.key, e.target.value)}
+                      onBlur={handleAutoSave}
                       className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-bar-accent text-right"
                       placeholder="0"
                     />
@@ -1163,163 +1070,80 @@ const MonthlyReport = () => {
             )}
           </div>
 
-          {editingExpenseEntries.length === 0 && savedManualExpenseEntries.length === 0 ? (
-            <p className="text-gray-500 text-sm text-center py-4">
-              追加ボタンから登録してください。
-            </p>
+          {manualExpenseEntries.length === 0 ? (
+            <p className="text-center text-gray-500 py-4">右上の追加ボタンから登録してください。</p>
           ) : (
-            <>
-              {editingExpenseEntries.length > 0 && (
-                <div className="space-y-4">
-                  {editingExpenseEntries.map((expense, index) => (
-                    <div key={expense.id || `temp-${index}`} className="border border-gray-200 rounded-md p-4 space-y-3">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 space-y-3">
-                      {isAllStores && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">店舗</label>
-                          <select
-                            value={expense.store}
-                            onChange={(e) => handleMonthlyExpenseChange(expense.store, expense.id, 'store', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          >
-                            {STORES.map(s => (
-                              <option key={s} value={s}>{s}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          項目
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            value={expense.name}
-                            onChange={(e) => handleMonthlyExpenseChange(expense.store, expense.id, 'name', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="経費名を入力..."
-                            autoComplete="off"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          金額
-                        </label>
-                        <input
-                          id={`expense-amount-${expense.id || `temp-${index}`}`}
-                          type="number"
-                          inputMode="numeric"
-                          value={expense.amount}
-                          onChange={(e) => handleMonthlyExpenseChange(expense.store, expense.id, 'amount', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="0"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          備考
-                        </label>
-                        <input
-                          type="text"
-                          value={expense.note || ''}
-                          onChange={(e) => handleMonthlyExpenseChange(expense.store, expense.id, 'note', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="備考を入力..."
-                          autoComplete="off"
-                        />
-                      </div>
+            <div className="space-y-3">
+              {manualExpenseEntries.map(expense => (
+                <div key={expense.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                  {isAllStores && (
+                    <div className="md:col-span-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">店舗</label>
+                      <select
+                        value={expense.store}
+                        onChange={(e) => handleMonthlyExpenseChange(expense.store, expense.id, 'store', e.target.value)}
+                        onBlur={handleAutoSave}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-bar-accent"
+                      >
+                        {STORES.map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
                     </div>
-
+                  )}
+                  <div className={isAllStores ? 'md:col-span-3' : 'md:col-span-4'}>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">項目</label>
+                    <input
+                      type="text"
+                      list="monthly-expense-suggestions"
+                      value={expense.name}
+                      onChange={(e) => handleMonthlyExpenseChange(expense.store, expense.id, 'name', e.target.value)}
+                      onBlur={handleAutoSave}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-bar-accent"
+                      placeholder="経費項目を入力..."
+                    />
+                  </div>
+                  <div className={isAllStores ? 'md:col-span-3' : 'md:col-span-3'}>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">金額</label>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={expense.amount}
+                      onChange={(e) => handleMonthlyExpenseChange(expense.store, expense.id, 'amount', e.target.value)}
+                      onBlur={handleAutoSave}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-bar-accent"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className={isAllStores ? 'md:col-span-3' : 'md:col-span-3'}>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">備考</label>
+                    <input
+                      type="text"
+                      value={expense.note || ''}
+                      onChange={(e) => handleMonthlyExpenseChange(expense.store, expense.id, 'note', e.target.value)}
+                      onBlur={handleAutoSave}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-bar-accent"
+                      placeholder="備考を入力..."
+                    />
+                  </div>
+                  <div className="md:col-span-1 flex md:justify-end">
                     <button
                       onClick={() => handleMonthlyExpenseRemove(expense.store, expense.id)}
-                      className="ml-3 px-3 py-2 bg-red-500 text-white rounded-md text-sm hover:bg-red-600 transition-colors"
+                      className="px-3 py-2 bg-red-500 text-white rounded-md text-sm hover:bg-red-600 transition-colors"
                     >
                       削除
                     </button>
-                    </div>
-                  </div>
-                  ))}
-                </div>
-              )}
-
-              {editingExpenseEntries.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-gray-200">
-                  <button
-                    onClick={handleSaveMonthlyExpenses}
-                    disabled={expenseSaveState === 'saving'}
-                    className="w-full py-3 rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-opacity-90 transition-colors"
-                    style={{ backgroundColor: 'var(--accent)', color: 'var(--header-bg)' }}
-                  >
-                    {getExpenseSaveButtonLabel()}
-                  </button>
-                </div>
-              )}
-
-              {savedManualExpenseEntries.length > 0 && (
-                <div className="mt-6 pt-4 border-t border-gray-200">
-                  <h4 className="text-sm font-semibold text-gray-700 mb-3">月報登録済み経費一覧</h4>
-                  <div className="bg-surface border border-default rounded-lg overflow-hidden transition-colors">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr style={{ backgroundColor: 'var(--accent)', color: 'var(--header-bg)' }}>
-                          <th
-                            className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200"
-                            style={{ borderTopLeftRadius: '0.5rem' }}
-                          >
-                            項目
-                          </th>
-                          {isAllStores && (
-                            <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200">店舗</th>
-                          )}
-                          <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200">金額</th>
-                          <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200">備考</th>
-                          <th
-                            className="px-3 py-2 text-center text-sm font-semibold"
-                            style={{ borderTopRightRadius: '0.5rem' }}
-                          >
-                            <span className="sr-only">編集</span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {savedManualExpenseEntries.map((expense, index) => (
-                          <tr
-                            key={`saved-${expense.id || index}`}
-                            className={`border-t border-gray-200 ${index % 2 === 0 ? 'bg-surface' : 'bg-surface-alt'}`}
-                          >
-                            <td className="px-3 py-2 text-sm text-gray-900 text-center border-r border-gray-200">{expense.name}</td>
-                            {isAllStores && (
-                              <td className="px-3 py-2 text-sm text-gray-700 text-center border-r border-gray-200">{expense.store || '-'}</td>
-                            )}
-                            <td className="px-3 py-2 text-sm text-gray-700 text-right border-r border-gray-200">
-                              <ValueWithUnit value={Number(expense.amount) || 0} unit="円" />
-                            </td>
-                            <td className="px-3 py-2 text-sm text-gray-700 text-center whitespace-pre-wrap border-r border-gray-200">
-                              {expense.note || '-'}
-                            </td>
-                            <td className="px-3 py-2 text-center align-middle" style={{ width: '5rem' }}>
-                              <button
-                                onClick={() => handleEditSavedExpense(expense)}
-                                className="px-3 py-1 text-sm font-medium rounded-md hover:bg-opacity-90 transition-colors"
-                                style={{ backgroundColor: 'var(--accent)', color: 'var(--header-bg)' }}
-                              >
-                                編集
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
                   </div>
                 </div>
-              )}
-            </>
+              ))}
+            </div>
           )}
+
+          <datalist id="monthly-expense-suggestions">
+            {expenseSuggestions.map((name, index) => (
+              <option key={index} value={name} />
+            ))}
+          </datalist>
 
           <div className="pt-4 border-t border-gray-200">
             <h4 className="text-sm font-semibold text-gray-700 mb-2">日報登録済み経費一覧</h4>
@@ -1388,12 +1212,11 @@ const MonthlyReport = () => {
             ) : reports.length === 0 ? (
               <p className="text-center text-gray-500 py-4">データがありません</p>
             ) : (
-              <div>
-                <div className="overflow-x-auto" style={{ position: 'relative' }}>
-                  <table className="w-full min-w-[960px] border-collapse" style={{ position: 'relative' }}>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[960px] border-collapse overflow-hidden rounded-lg">
                   <thead>
                     <tr style={{ backgroundColor: 'var(--accent)', color: 'var(--header-bg)' }}>
-                      <th className="px-2 py-2 text-center text-sm font-semibold border-r border-yellow-200 sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.1)]" style={{ backgroundColor: 'var(--accent)', minWidth: '90px', maxWidth: '90px', width: '90px' }}>日付</th>
+                      <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200">日付</th>
                       <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">組数</th>
                       <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">人数</th>
                       {selectedStore === 'TEPPEN' ? null : (
@@ -1441,7 +1264,7 @@ const MonthlyReport = () => {
                         key={`${report.date}-${report.store_id}-${index}`}
                         className={`border-b border-gray-200 ${index % 2 === 0 ? 'bg-surface' : 'bg-surface-alt'}`}
                       >
-                          <td className="px-2 py-2 text-sm text-gray-900 border-r border-gray-200 sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.1)] text-center" style={{ backgroundColor: index % 2 === 0 ? 'var(--surface)' : 'var(--surface-alt)', minWidth: '90px', maxWidth: '90px', width: '90px' }}>{dateLabel}</td>
+                          <td className="px-3 py-2 text-sm text-gray-900 border-r border-gray-200">{dateLabel}</td>
                           <td className="px-3 py-2 text-sm text-gray-700 text-right border-r border-gray-200">
                             <ValueWithUnit value={groupsValue} unit="組" />
                           </td>
@@ -1481,7 +1304,6 @@ const MonthlyReport = () => {
                     })}
                   </tbody>
                 </table>
-                </div>
               </div>
             )}
           </div>
@@ -1504,6 +1326,7 @@ const MonthlyReport = () => {
             [staffId]: value
           }))
         }
+        onMemoBlur={handleAutoSave}
       />
 
       <div className="bg-surface rounded-lg shadow border border-default overflow-hidden transition-colors">
@@ -1517,26 +1340,13 @@ const MonthlyReport = () => {
           <textarea
             value={monthlyOpinions}
             onChange={(e) => setMonthlyOpinions(e.target.value)}
+            onBlur={handleAutoSave}
             rows={6}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-bar-accent"
             placeholder="この月の所感を入力してください"
           />
         </div>
       </div>
-
-    <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-default p-4 shadow-lg transition-colors z-50">
-      <button
-        onClick={handleSave}
-        disabled={isSaving}
-        className="w-full py-3 rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-opacity-90"
-        style={{
-          backgroundColor: saveStatus === '保存エラー' ? '#dc2626' : 'var(--accent)',
-          color: saveStatus === '保存エラー' ? '#ffffff' : 'var(--header-bg)'
-        }}
-      >
-        {getSaveButtonLabel()}
-      </button>
-    </div>
     </div>
   )
 }

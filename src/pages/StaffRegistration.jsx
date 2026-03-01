@@ -94,46 +94,61 @@ const StaffRegistration = () => {
     }, 500)
 
     try {
-      const trimmedName = formData.name.trim()
-      
-      // 同名のアクティブなスタッフが既に存在するか確認
-      const { data: existingStaffs, error: checkError } = await supabase
-        .from('staffs')
-        .select('id, name')
-        .eq('name', trimmedName)
-        .eq('is_active', true)
-
-      if (checkError) {
-        throw new Error(`重複チェックエラー: ${checkError.message}`)
-      }
-
-      // 編集時は、自分自身以外の同名スタッフが存在するかチェック
-      // 新規登録時は、同名スタッフが存在するかチェック
-      const duplicateStaff = editingId
-        ? existingStaffs?.find(s => s.id !== editingId)
-        : existingStaffs && existingStaffs.length > 0 ? existingStaffs[0] : null
-
-      if (duplicateStaff) {
-        throw new Error(`同名のスタッフ「${trimmedName}」は既に登録されています`)
-      }
-
       const staffData = {
-        name: trimmedName,
+        name: formData.name.trim(),
         store_ids: formData.store_ids.length > 0 ? formData.store_ids : [],
         is_active: true
       }
 
       if (editingId) {
-        // ID変更なしの通常更新
-        const { data, error } = await supabase
-          .from('staffs')
-          .update(staffData)
-          .eq('id', editingId)
-          .select()
+        // 更新（ID変更の場合は削除して再作成）
+        if (formData.id && parseInt(formData.id) !== editingId) {
+          const newId = parseInt(formData.id)
+          
+          // 新しいIDが既に存在するか確認
+          const { data: existingStaff } = await supabase
+            .from('staffs')
+            .select('id')
+            .eq('id', newId)
+            .single()
+          
+          if (existingStaff) {
+            throw new Error(`ID ${newId} は既に使用されています`)
+          }
+          
+          // 古いIDのデータを削除
+          const { error: deleteError } = await supabase
+            .from('staffs')
+            .delete()
+            .eq('id', editingId)
+          
+          if (deleteError) throw deleteError
+          
+          // 新しいIDでデータを挿入
+          const { data, error } = await supabase
+            .from('staffs')
+            .insert({
+              id: newId,
+              ...staffData
+            })
+            .select()
+          
+          if (error) {
+            console.error('Update error:', error)
+            throw new Error(`更新エラー: ${error.message}`)
+          }
+        } else {
+          // ID変更なしの通常更新
+          const { data, error } = await supabase
+            .from('staffs')
+            .update(staffData)
+            .eq('id', editingId)
+            .select()
 
-        if (error) {
-          console.error('Update error:', error)
-          throw new Error(`更新エラー: ${error.message}`)
+          if (error) {
+            console.error('Update error:', error)
+            throw new Error(`更新エラー: ${error.message}`)
+          }
         }
       } else {
         // 新規登録
@@ -218,6 +233,24 @@ const StaffRegistration = () => {
         </div>
 
         <div className="space-y-4 p-4">
+          {editingId && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                ID
+              </label>
+              <input
+                type="number"
+                inputMode="numeric"
+                value={formData.id}
+                onChange={(e) => handleInputChange('id', e.target.value)}
+                className="w-full px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-bar-accent"
+                placeholder="IDを入力"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                編集時のみIDを変更できます。既存のIDと重複しないようにしてください。
+              </p>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               名前 <span className="text-red-500">*</span>

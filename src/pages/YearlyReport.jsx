@@ -160,20 +160,8 @@ const YearlyReport = () => {
 
       if (error) throw error
 
-      // 各スタッフの勤務日数を計算（組数が入力されている日数をカウント）
-      const workDaysMap = {}
       const aggregatedMap = (data || []).reduce((acc, current) => {
         const key = current.staff_id
-        
-        // 勤務日数のカウント（組数が入力されている日）
-        if (!workDaysMap[key]) {
-          workDaysMap[key] = new Set()
-        }
-        const groupsValue = current.groups != null ? Number(current.groups) : 0
-        if (groupsValue > 0 || current.groups != null) {
-          workDaysMap[key].add(current.date)
-        }
-        
         if (!acc[key]) {
           acc[key] = {
             id: key,
@@ -186,16 +174,15 @@ const YearlyReport = () => {
             base_salary: 0,
             champagne_deduction: 0,
             paid_salary: 0,
-            fraction_cut: 0,
-            work_days: 0
+            fraction_cut: 0
           }
         }
 
         acc[key].sales_amount += current.sales_amount || 0
         acc[key].credit_amount += current.credit_amount || 0
         acc[key].shisha_count += current.shisha_count || 0
-        acc[key].groups += Number(current.groups) || 0
-        acc[key].customers += Number(current.customers) || 0
+        acc[key].groups += current.groups || 0
+        acc[key].customers += current.customers || 0
         acc[key].base_salary += current.base_salary || 0
         acc[key].champagne_deduction += current.champagne_deduction || 0
         acc[key].paid_salary += current.paid_salary || 0
@@ -203,11 +190,6 @@ const YearlyReport = () => {
 
         return acc
       }, {})
-
-      // 勤務日数を設定
-      Object.keys(aggregatedMap).forEach(staffId => {
-        aggregatedMap[staffId].work_days = workDaysMap[staffId]?.size || 0
-      })
 
       const aggregatedResults = Object.values(aggregatedMap).sort((a, b) => a.staff_id - b.staff_id)
       setStaffYearlyResults(aggregatedResults)
@@ -251,36 +233,14 @@ const YearlyReport = () => {
 
   const loadStaffs = async () => {
     try {
-      // スタッフ一覧を取得（削除済みスタッフも含む。実績データの表示に必要）
       const { data, error } = await supabase
         .from('staffs')
         .select('*')
+        .eq('is_active', true)
         .order('id')
 
       if (error) throw error
-      
-      // 重複を除去（同じ名前のスタッフが複数ある場合、IDが大きいものを優先）
-      if (data && data.length > 0) {
-        const uniqueStaffs = []
-        const nameMap = new Map()
-        
-        // IDの降順でソートして、同じ名前の場合は最初に見つかったもの（IDが大きいもの）を優先
-        const sortedData = [...data].sort((a, b) => b.id - a.id)
-        
-        for (const staff of sortedData) {
-          if (!nameMap.has(staff.name)) {
-            nameMap.set(staff.name, true)
-            uniqueStaffs.push(staff)
-          }
-        }
-        
-        // IDの昇順でソートし直す
-        uniqueStaffs.sort((a, b) => a.id - b.id)
-        
-        setStaffs(uniqueStaffs)
-      } else {
-        setStaffs([])
-      }
+      setStaffs(data || [])
     } catch (err) {
       console.error('Error loading staffs:', err)
       setStaffs([])
@@ -440,54 +400,58 @@ const YearlyReport = () => {
   }
 
   const summary = useMemo(() => {
-    // 日報データから経費と日付を計算
-    const reportTotals = (reports || []).reduce(
-      (acc, report) => {
-        acc.totalExpense += report.total_expense_amount || 0
-        acc.uniqueDates.add(report.date)
-        return acc
-      },
-      {
+    if (!reports || reports.length === 0) {
+      return {
+        totalSales: 0,
+        totalCredit: 0,
         totalExpense: 0,
-        uniqueDates: new Set()
+        totalSalary: 0,
+        totalGroups: 0,
+        totalCustomers: 0,
+        totalShisha: 0,
+        totalBalance: 0,
+        daysCount: 0
       }
-    )
+    }
 
-    // スタッフ実績から売上、クレカ決済、給与、組数、人数、シーシャ販売数を計算（これが最も正確）
-    const staffTotals = (staffYearlyResults || []).reduce(
-      (acc, result) => {
-        acc.totalSales += result.sales_amount || 0
-        acc.totalCredit += result.credit_amount || 0
-        acc.totalSalary += result.base_salary || 0
-        acc.totalGroups += Number(result.groups) || 0
-        acc.totalCustomers += Number(result.customers) || 0
-        acc.totalShisha += result.shisha_count || 0
+    const totals = reports.reduce(
+      (acc, report) => {
+        acc.totalSales += report.total_sales_amount || 0
+        acc.totalCredit += report.credit_amount || 0
+        acc.totalExpense += report.total_expense_amount || 0
+        acc.totalSalary += report.total_salary_amount || 0
+        acc.totalGroups += report.total_groups || 0
+        acc.totalCustomers += report.total_customers || 0
+        acc.totalShisha += report.total_shisha || 0
+        acc.totalBalance += (report.total_sales_amount || 0) - ((report.total_expense_amount || 0) + (report.total_salary_amount || 0))
+        acc.uniqueDates.add(report.date)
         return acc
       },
       {
         totalSales: 0,
         totalCredit: 0,
+        totalExpense: 0,
         totalSalary: 0,
         totalGroups: 0,
         totalCustomers: 0,
-        totalShisha: 0
+        totalShisha: 0,
+        totalBalance: 0,
+        uniqueDates: new Set()
       }
     )
 
-    const totalBalance = staffTotals.totalSales - (reportTotals.totalExpense + staffTotals.totalSalary)
-
     return {
-      totalSales: staffTotals.totalSales,
-      totalCredit: staffTotals.totalCredit,
-      totalExpense: reportTotals.totalExpense,
-      totalSalary: staffTotals.totalSalary,
-      totalGroups: staffTotals.totalGroups,
-      totalCustomers: staffTotals.totalCustomers,
-      totalShisha: staffTotals.totalShisha,
-      totalBalance: totalBalance,
-      daysCount: reportTotals.uniqueDates.size
+      totalSales: totals.totalSales,
+      totalCredit: totals.totalCredit,
+      totalExpense: totals.totalExpense,
+      totalSalary: totals.totalSalary,
+      totalGroups: totals.totalGroups,
+      totalCustomers: totals.totalCustomers,
+      totalShisha: totals.totalShisha,
+      totalBalance: totals.totalBalance,
+      daysCount: totals.uniqueDates.size
     }
-  }, [reports, staffYearlyResults])
+  }, [reports])
 
   const isAllStores = selectedStore === ALL_STORES_OPTION
 
@@ -711,8 +675,13 @@ const YearlyReport = () => {
     }
   }
 
+  const handleAutoSave = () => {
+    if (isSaving) return
+    handleSave()
+  }
+
   return (
-    <div className="space-y-6 pb-24 text-primary">
+    <div className="space-y-6 pb-6 text-primary">
       <div className="bg-surface rounded-lg shadow border border-default overflow-hidden transition-colors">
         <div
           className="flex items-center justify-between px-4 py-3"
@@ -842,51 +811,29 @@ const YearlyReport = () => {
           </div>
 
           {manualExpenseEntries.length > 0 && (
-            <div className="mt-6 pt-4 border-t border-gray-200">
-              <h4 className="text-sm font-semibold text-gray-700 mb-3">月報登録済み経費一覧</h4>
-              <div className="bg-surface border border-default rounded-lg overflow-hidden transition-colors">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr style={{ backgroundColor: 'var(--accent)', color: 'var(--header-bg)' }}>
-                      <th
-                        className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200"
-                        style={{ borderTopLeftRadius: '0.5rem' }}
-                      >
-                        項目
-                      </th>
-                      {isAllStores && (
-                        <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200">店舗</th>
-                      )}
-                      <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200">金額</th>
-                      <th
-                        className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200"
-                        style={{ borderTopRightRadius: '0.5rem' }}
-                      >
-                        備考
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {manualExpenseEntries.map((expense, index) => (
-                      <tr
-                        key={`${expense.store}-${expense.name}-${index}`}
-                        className={`border-t border-gray-200 ${index % 2 === 0 ? 'bg-surface' : 'bg-surface-alt'}`}
-                      >
-                        <td className="px-3 py-2 text-sm text-gray-900 text-center border-r border-gray-200">{expense.name}</td>
-                        {isAllStores && (
-                          <td className="px-3 py-2 text-sm text-gray-700 text-center border-r border-gray-200">{expense.store || '-'}</td>
-                        )}
-                        <td className="px-3 py-2 text-sm text-gray-700 text-right border-r border-gray-200">
-                          <ValueWithUnit value={Number(expense.amount) || 0} unit="円" />
-                        </td>
-                        <td className="px-3 py-2 text-sm text-gray-700 text-center whitespace-pre-wrap border-r border-gray-200">
-                          {expense.notes || '-'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <div className="space-y-3">
+              {manualExpenseEntries.map(expense => (
+                <div key={`${expense.store}-${expense.name}`} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                  {isAllStores && (
+                    <div className="md:col-span-3">
+                      <span className="block text-sm font-medium text-gray-500">店舗</span>
+                      <span className="text-sm text-gray-900 font-semibold">{expense.store}</span>
+                    </div>
+                  )}
+                  <div className={isAllStores ? 'md:col-span-4' : 'md:col-span-6'}>
+                    <span className="block text-sm font-medium text-gray-500">項目</span>
+                    <span className="text-sm text-gray-900 font-semibold">{expense.name}</span>
+                  </div>
+                  <div className={isAllStores ? 'md:col-span-3' : 'md:col-span-3'}>
+                    <span className="block text-sm font-medium text-gray-500">金額</span>
+                    <ValueWithUnit value={Number(expense.amount) || 0} unit="円" valueClassName="text-sm text-gray-900 font-semibold" />
+                  </div>
+                  <div className={isAllStores ? 'md:col-span-2' : 'md:col-span-3'}>
+                    <span className="block text-sm font-medium text-gray-500">備考</span>
+                    <span className="text-sm text-gray-700">{expense.notes || '-'}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
@@ -956,12 +903,11 @@ const YearlyReport = () => {
             ) : reports.length === 0 ? (
               <p className="text-center text-gray-500 py-4">データがありません</p>
             ) : (
-              <div>
-                <div className="overflow-x-auto" style={{ position: 'relative' }}>
-                  <table className="w-full min-w-[960px] border-collapse" style={{ position: 'relative' }}>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[960px] border-collapse overflow-hidden rounded-lg">
                   <thead>
                     <tr style={{ backgroundColor: 'var(--accent)', color: 'var(--header-bg)' }}>
-                      <th className="px-2 py-2 text-center text-sm font-semibold border-r border-yellow-200 sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.1)]" style={{ backgroundColor: 'var(--accent)', minWidth: '90px', maxWidth: '90px', width: '90px' }}>日付</th>
+                      <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200">日付</th>
                       <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">組数</th>
                       <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">人数</th>
                       {selectedStore === 'TEPPEN' ? null : (
@@ -1008,7 +954,7 @@ const YearlyReport = () => {
                         key={`${report.date}-${report.store_id}-${index}`}
                         className={`border-b border-gray-200 ${index % 2 === 0 ? 'bg-surface' : 'bg-surface-alt'}`}
                       >
-                          <td className="px-2 py-2 text-sm text-gray-900 border-r border-gray-200 sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.1)] text-center" style={{ backgroundColor: index % 2 === 0 ? 'var(--surface)' : 'var(--surface-alt)', minWidth: '90px', maxWidth: '90px', width: '90px' }}>{dateLabel}</td>
+                          <td className="px-3 py-2 text-sm text-gray-900 border-r border-gray-200">{dateLabel}</td>
                           <td className="px-3 py-2 text-sm text-gray-700 text-right border-r border-gray-200">
                             <ValueWithUnit value={groupsValue} unit="組" />
                           </td>
@@ -1046,7 +992,6 @@ const YearlyReport = () => {
                     })}
                   </tbody>
                 </table>
-                </div>
               </div>
             )}
           </div>
@@ -1069,6 +1014,7 @@ const YearlyReport = () => {
             [staffId]: value
           }))
         }
+        onMemoBlur={handleAutoSave}
       />
 
       <div className="bg-surface rounded-lg shadow border border-default overflow-hidden transition-colors">
@@ -1082,25 +1028,12 @@ const YearlyReport = () => {
           <textarea
             value={yearlyOpinions}
             onChange={(e) => setYearlyOpinions(e.target.value)}
+            onBlur={handleAutoSave}
             rows={6}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-bar-accent"
             placeholder="この年の所感を入力してください"
           />
         </div>
-      </div>
-
-      <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-default p-4 shadow-lg transition-colors z-50">
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="w-full py-3 rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-opacity-90"
-          style={{
-            backgroundColor: saveStatus === '保存エラー' ? '#dc2626' : '#FCAF17',
-            color: '#00001C'
-          }}
-        >
-          {getSaveButtonLabel()}
-        </button>
       </div>
     </div>
   )

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns'
+import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from 'date-fns'
 import ja from 'date-fns/locale/ja'
 import { supabase } from '../lib/supabase'
 import ValueWithUnit from '../components/common/ValueWithUnit'
@@ -15,6 +15,7 @@ const StaffPerformance = () => {
   const [performanceData, setPerformanceData] = useState([])
   const [summary, setSummary] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [availableStaffIds, setAvailableStaffIds] = useState(new Set())
 
   useEffect(() => {
     loadStaffs()
@@ -26,41 +27,54 @@ const StaffPerformance = () => {
     }
   }, [selectedStaffId, selectedStore, selectedYear, selectedMonth])
 
+  useEffect(() => {
+    loadAvailableStaffs()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedYear, selectedStore])
+
   const loadStaffs = async () => {
     try {
-      // スタッフ一覧を取得（削除済みスタッフも含む。実績データの表示に必要）
       const { data, error } = await supabase
         .from('staffs')
         .select('*')
+        .eq('is_active', true)
         .order('id')
 
       if (!error && data) {
-        // 重複を除去（同じ名前のスタッフが複数ある場合、IDが大きいものを優先）
-        const uniqueStaffs = []
-        const nameMap = new Map()
-        
-        // IDの降順でソートして、同じ名前の場合は最初に見つかったもの（IDが大きいもの）を優先
-        const sortedData = [...data].sort((a, b) => b.id - a.id)
-        
-        for (const staff of sortedData) {
-          if (!nameMap.has(staff.name)) {
-            nameMap.set(staff.name, true)
-            uniqueStaffs.push(staff)
-          }
-        }
-        
-        // IDの昇順でソートし直す
-        uniqueStaffs.sort((a, b) => a.id - b.id)
-        
-        setStaffs(uniqueStaffs)
-        // 初期選択はアクティブなスタッフの最初の1人
-        const activeStaff = uniqueStaffs.find(s => s.is_active !== false)
-        if (activeStaff && !selectedStaffId) {
-          setSelectedStaffId(activeStaff.id)
+        setStaffs(data)
+        if (data.length > 0 && !selectedStaffId) {
+          setSelectedStaffId(data[0].id)
         }
       }
     } catch (error) {
       console.error('Error loading staffs:', error)
+    }
+  }
+
+  const loadAvailableStaffs = async () => {
+    try {
+      const startDate = format(startOfYear(new Date(selectedYear, 0, 1)), 'yyyy-MM-dd')
+      const endDate = format(endOfYear(new Date(selectedYear, 0, 1)), 'yyyy-MM-dd')
+
+      let query = supabase
+        .from('staff_daily_results')
+        .select('staff_id')
+        .gte('date', startDate)
+        .lte('date', endDate)
+
+      if (selectedStore) {
+        query = query.eq('store_id', selectedStore)
+      }
+
+      const { data, error } = await query
+
+      if (error) throw error
+
+      const ids = new Set((data || []).map(item => item.staff_id))
+      setAvailableStaffIds(ids)
+    } catch (error) {
+      console.error('Error loading available staffs:', error)
+      setAvailableStaffIds(new Set())
     }
   }
 
@@ -131,7 +145,7 @@ const StaffPerformance = () => {
 
   const getStaffName = (staffId) => {
     const staff = staffs.find(s => s.id === staffId)
-    return staff ? staff.name : `ID: ${staffId}`
+    return staff ? staff.name : '未登録'
   }
 
   const handleQuickMonth = (type) => {
@@ -153,6 +167,17 @@ const StaffPerformance = () => {
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
   const months = Array.from({ length: 12 }, (_, i) => i + 1)
+  const filteredStaffs = staffs.filter(staff => availableStaffIds.has(staff.id))
+
+  useEffect(() => {
+    if (filteredStaffs.length === 0) {
+      setSelectedStaffId(null)
+      return
+    }
+    if (!filteredStaffs.some(staff => staff.id === selectedStaffId)) {
+      setSelectedStaffId(filteredStaffs[0].id)
+    }
+  }, [filteredStaffs, selectedStaffId])
 
   const SummaryItem = ({ label, value, highlight = false, colSpan = 1 }) => (
      <div
@@ -198,7 +223,7 @@ const StaffPerformance = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-bar-accent"
             >
               <option value="">選択してください</option>
-              {staffs.map(staff => (
+              {filteredStaffs.map(staff => (
                 <option key={staff.id} value={staff.id}>
                   {staff.name}
                 </option>
@@ -375,12 +400,11 @@ const StaffPerformance = () => {
           ) : performanceData.length === 0 ? (
             <p className="text-center text-gray-500 py-4">データがありません</p>
           ) : (
-            <div>
-              <div className="overflow-x-auto" style={{ position: 'relative' }}>
-                <table className="w-full min-w-[960px] border-collapse" style={{ position: 'relative' }}>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse overflow-hidden rounded-lg">
                 <thead>
                   <tr style={{ backgroundColor: '#FCAF17', color: '#00001C' }}>
-                    <th className="px-2 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.1)]" style={{ backgroundColor: '#FCAF17', minWidth: '90px', maxWidth: '90px', width: '90px' }}>
+                    <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">
                       日付
                     </th>
                     <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">
@@ -423,7 +447,7 @@ const StaffPerformance = () => {
                         key={data.id || index}
                         className={`border-b border-gray-200 ${index % 2 === 0 ? 'bg-surface' : 'bg-surface-alt'}`}
                       >
-                        <td className="px-2 py-2 text-sm text-gray-900 text-center border-r border-gray-200 sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.1)]" style={{ backgroundColor: index % 2 === 0 ? 'var(--surface)' : 'var(--surface-alt)', minWidth: '90px', maxWidth: '90px', width: '90px' }}>
+                        <td className="px-3 py-2 text-sm text-gray-900 text-center border-r border-gray-200">
                           {format(new Date(data.date + 'T00:00:00'), 'M/d(E)', { locale: ja })}
                         </td>
                         <td className="px-3 py-2 text-sm text-gray-900 text-center border-r border-gray-200">
@@ -475,7 +499,6 @@ const StaffPerformance = () => {
                   })}
                 </tbody>
               </table>
-              </div>
             </div>
           )}
           </div>

@@ -26,6 +26,7 @@ const DailyReport = () => {
   })
   const [expenses, setExpenses] = useState([])
   const [savedExpensesDisplay, setSavedExpensesDisplay] = useState([])
+  const [deletedExpenseIds, setDeletedExpenseIds] = useState([])
   const [opinion, setOpinion] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
@@ -143,10 +144,12 @@ const DailyReport = () => {
       if (!expenseError && expenseData) {
         setExpenses([])
         setSavedExpensesDisplay(mapExpensesForDisplay(expenseData))
+        setDeletedExpenseIds([])
       } else {
         // 経費データが存在しない場合は空配列にリセット
         setExpenses([])
         setSavedExpensesDisplay([])
+        setDeletedExpenseIds([])
       }
     } catch (error) {
       console.error('Error loading data:', error)
@@ -295,6 +298,17 @@ const DailyReport = () => {
       const totalCustomers = parseFloat(salesData.customers) || 0
       const totalShisha = parseFloat(salesData.shishaCount) || 0
 
+      const hasStaffInput = [
+        salesData.salesAmount,
+        salesData.creditAmount,
+        salesData.shishaCount,
+        salesData.groups,
+        salesData.customers,
+        salaryData.baseSalary,
+        salaryData.champagneDeduction
+      ].some((value) => value !== '' && value !== null && value !== undefined)
+        || (combinedMemo && combinedMemo.trim().length > 0)
+
       // 経費データの保存
       const expensePromises = expenses.map(expense => {
         if (expense.id) {
@@ -321,6 +335,15 @@ const DailyReport = () => {
 
       await Promise.all(expensePromises)
 
+      // 削除対象の経費を反映
+      const idsToDelete = deletedExpenseIds.filter(id => !expenses.some(exp => exp.id === id))
+      if (idsToDelete.length > 0) {
+        await supabase
+          .from('expenses')
+          .delete()
+          .in('id', idsToDelete)
+      }
+
       // 経費データを再読み込み
       const { data: refreshedExpenses, error: refreshedExpenseError } = await supabase
         .from('expenses')
@@ -334,6 +357,34 @@ const DailyReport = () => {
           expenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0) +
           savedExpensesDisplay.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0)
         )
+
+      const hasReportData = hasStaffInput
+        || fetchedExpenseTotal > 0
+        || (opinion && opinion.trim().length > 0)
+        || (combinedMemo && combinedMemo.trim().length > 0)
+
+      if (!hasReportData) {
+        const { error: deleteReportError } = await supabase
+          .from('daily_reports')
+          .delete()
+          .eq('date', selectedDate)
+          .eq('store_id', selectedStore)
+
+        if (deleteReportError) {
+          throw deleteReportError
+        }
+
+        if (!refreshedExpenseError && refreshedExpenses) {
+          setExpenses([])
+          setSavedExpensesDisplay(mapExpensesForDisplay(refreshedExpenses))
+          setDeletedExpenseIds([])
+        }
+
+        setSaveStatus('保存完了')
+        setTimeout(() => setSaveStatus(''), 2000)
+        await loadStaffResults()
+        return
+      }
 
       // 日報データの保存（経費を保存後の合計を反映）
       const { error: reportError } = await supabase
@@ -361,10 +412,11 @@ const DailyReport = () => {
       if (!refreshedExpenseError && refreshedExpenses) {
         setExpenses([])
         setSavedExpensesDisplay(mapExpensesForDisplay(refreshedExpenses))
+        setDeletedExpenseIds([])
       }
 
       // スタッフの日次実績を保存
-      if (selectedStaffId) {
+      if (selectedStaffId && hasStaffInput) {
         const baseSalary = calculateSalary()
         const deduction = parseFloat(salaryData.champagneDeduction) || 0
         const paidSalary = calculatePaidSalary()
@@ -407,6 +459,11 @@ const DailyReport = () => {
     }
   }
 
+  const handleAutoSave = () => {
+    if (isSaving) return
+    handleSave()
+  }
+
   const handleEditSavedExpense = (savedExpense) => {
     if (!savedExpense || !savedExpense.id) return
 
@@ -432,6 +489,107 @@ const DailyReport = () => {
         element.focus()
       }
     }, 0)
+  }
+
+  const handleRemoveExpense = (expense) => {
+    if (!expense?.id) return
+    setDeletedExpenseIds((prev) => {
+      if (prev.includes(expense.id)) return prev
+      return [...prev, expense.id]
+    })
+  }
+
+  const handleDeleteStaffResult = async (resultId, staffId) => {
+    if (!resultId) return
+    const staffName = staffs.find((staff) => staff.id === staffId)?.name || '未登録'
+    if (!window.confirm(`スタッフ「${staffName}」の実績を削除しますか？`)) {
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('staff_daily_results')
+        .delete()
+        .eq('id', resultId)
+
+      if (error) {
+        throw error
+      }
+
+      if (selectedStaffId === staffId) {
+        setSalesData({
+          groups: '',
+          customers: '',
+          salesAmount: '',
+          creditAmount: '',
+          shishaCount: ''
+        })
+        setSalaryData({
+          baseSalary: '',
+          champagneDeduction: ''
+        })
+        setCombinedMemo('')
+      }
+
+      await loadStaffResults()
+
+      const { data: remainingResults, error: resultsError } = await supabase
+        .from('staff_daily_results')
+        .select('*')
+        .eq('date', selectedDate)
+        .eq('store_id', selectedStore)
+
+      if (resultsError) {
+        console.error('Error loading staff results for summary:', resultsError)
+      }
+
+      const totalSales = (remainingResults || []).reduce((sum, result) => sum + (result.sales_amount || 0), 0)
+      const totalCredit = (remainingResults || []).reduce((sum, result) => sum + (result.credit_amount || 0), 0)
+      const totalSalary = (remainingResults || []).reduce((sum, result) => sum + (result.base_salary || 0), 0)
+      const totalGroups = (remainingResults || []).reduce((sum, result) => sum + (Number(result.groups) || 0), 0)
+      const totalCustomers = (remainingResults || []).reduce((sum, result) => sum + (Number(result.customers) || 0), 0)
+      const totalShisha = (remainingResults || []).reduce((sum, result) => sum + (result.shisha_count || 0), 0)
+
+      const { data: expenseData } = await supabase
+        .from('expenses')
+        .select('amount')
+        .eq('date', selectedDate)
+        .eq('store_id', selectedStore)
+
+      const totalExpenseAmount = (expenseData || []).reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0)
+
+      const { data: existingReport } = await supabase
+        .from('daily_reports')
+        .select('opinion, memo')
+        .eq('date', selectedDate)
+        .eq('store_id', selectedStore)
+        .maybeSingle()
+
+      const { error: reportError } = await supabase
+        .from('daily_reports')
+        .upsert({
+          date: selectedDate,
+          store_id: selectedStore,
+          total_sales_amount: totalSales,
+          credit_amount: totalCredit,
+          total_groups: totalGroups,
+          total_customers: totalCustomers,
+          total_shisha: totalShisha,
+          total_salary_amount: totalSalary,
+          total_expense_amount: totalExpenseAmount,
+          memo: existingReport?.memo || '',
+          opinion: existingReport?.opinion || ''
+        }, {
+          onConflict: 'date,store_id'
+        })
+
+      if (reportError) {
+        console.error('Error updating daily report after deletion:', reportError)
+      }
+    } catch (error) {
+      console.error('Error deleting staff result:', error)
+      alert('スタッフ実績の削除に失敗しました。')
+    }
   }
 
   // サマリーデータを計算（保存済みの全スタッフデータから合計を計算）
@@ -596,6 +754,7 @@ const DailyReport = () => {
         staffs={staffs}
         selectedStaffId={selectedStaffId}
         onStaffChange={setSelectedStaffId}
+        onBlur={handleAutoSave}
       />
 
       {/* 給与入力 */}
@@ -612,12 +771,14 @@ const DailyReport = () => {
         onNextStaff={handleNextStaff}
         memoValue={combinedMemo}
         onMemoChange={setCombinedMemo}
+        onBlur={handleAutoSave}
       />
 
       {/* 経費入力 */}
       <ExpenseInput
         expenses={expenses}
         onChange={setExpenses}
+        onRemoveExpense={handleRemoveExpense}
         onSave={async () => {
           try {
             const totalExpense = expenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0)
@@ -648,6 +809,26 @@ const DailyReport = () => {
 
             await Promise.all(expensePromises)
 
+            // 削除対象の経費を反映
+            const idsToDelete = deletedExpenseIds.filter(id => !expenses.some(exp => exp.id === id))
+            if (idsToDelete.length > 0) {
+              await supabase
+                .from('expenses')
+                .delete()
+                .in('id', idsToDelete)
+            }
+
+            // 経費データを再読み込み
+            const { data: expenseData, error: expenseError } = await supabase
+              .from('expenses')
+              .select('*')
+              .eq('date', selectedDate)
+              .eq('store_id', selectedStore)
+
+            const refreshedExpenseTotal = !expenseError && expenseData
+              ? expenseData.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0)
+              : totalExpense
+
             // 日報データの経費合計を更新
             const { data: reportData } = await supabase
               .from('daily_reports')
@@ -660,24 +841,19 @@ const DailyReport = () => {
               await supabase
                 .from('daily_reports')
                 .update({
-                  total_expense_amount: totalExpense
+                  total_expense_amount: refreshedExpenseTotal
                 })
                 .eq('id', reportData.id)
             }
 
-            // 経費データを再読み込み
-            const { data: expenseData, error: expenseError } = await supabase
-              .from('expenses')
-              .select('*')
-              .eq('date', selectedDate)
-              .eq('store_id', selectedStore)
-
             if (!expenseError && expenseData) {
               setExpenses([])
               setSavedExpensesDisplay(mapExpensesForDisplay(expenseData))
+              setDeletedExpenseIds([])
             } else {
               setExpenses([])
               setSavedExpensesDisplay([])
+              setDeletedExpenseIds([])
             }
 
             return true
@@ -721,25 +897,12 @@ const DailyReport = () => {
         staffResults={staffResults}
         staffs={staffs}
         store={selectedStore}
+        onDelete={handleDeleteStaffResult}
       />
 
-      {/* 保存ボタン */}
-      <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-default p-4 shadow-lg transition-colors">
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="w-full py-3 rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-opacity-90"
-          style={{
-            backgroundColor: saveStatus === '保存エラー' ? '#dc2626' : '#FCAF17',
-            color: '#00001C'
-          }}
-        >
-          {isSaving ? '保存中...' : (saveStatus || '保存')}
-        </button>
-        {statusMessage && (
-          <p className="text-center text-sm mt-2 text-gray-600">{statusMessage}</p>
-        )}
-      </div>
+      {statusMessage && (
+        <p className="text-center text-sm text-gray-600">{statusMessage}</p>
+      )}
     </div>
   )
 }
