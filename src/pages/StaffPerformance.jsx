@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from 'date-fns'
 import ja from 'date-fns/locale/ja'
 import { supabase } from '../lib/supabase'
+import { summarizeStaffPerformance } from '../lib/reportUtils'
 import ValueWithUnit from '../components/common/ValueWithUnit'
 
 const STORES = ['TEPPEN', '201', '202']
@@ -103,33 +104,7 @@ const StaffPerformance = () => {
       if (!error && data) {
         setPerformanceData(data)
         
-        // サマリーを計算
-        const uniqueDates = new Set(data.map(d => d.date)).size
-        const totalGroups = data.reduce((sum, d) => sum + (d.groups || 0), 0)
-        const totalCustomers = data.reduce((sum, d) => sum + (d.customers || 0), 0)
-        const totalSales = data.reduce((sum, d) => sum + (d.sales_amount || 0), 0)
-        const totalCredit = data.reduce((sum, d) => sum + (d.credit_amount || 0), 0)
-        const totalShisha = data.reduce((sum, d) => sum + (d.shisha_count || 0), 0)
-        const totalBaseSalary = data.reduce((sum, d) => sum + (d.base_salary || 0), 0)
-        const totalChampagneDeduction = data.reduce((sum, d) => sum + (d.champagne_deduction || 0), 0)
-        const totalFractionCut = data.reduce((sum, d) => sum + (d.fraction_cut || 0), 0)
-        const totalPaidSalary = data.reduce((sum, d) => sum + (d.paid_salary || 0), 0)
-        const dailyPaid = uniqueDates > 0 ? Math.floor(totalPaidSalary / uniqueDates) : 0
-
-        const summaryData = {
-          workDays: uniqueDates,
-          totalGroups,
-          totalCustomers,
-          totalSales,
-          totalCredit,
-          totalShisha,
-          totalBaseSalary,
-          totalChampagneDeduction,
-          totalFractionCut,
-          totalPaidSalary,
-          dailyPaid
-        }
-        setSummary(summaryData)
+        setSummary(summarizeStaffPerformance(data))
       } else {
         setPerformanceData([])
         setSummary(null)
