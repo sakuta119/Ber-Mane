@@ -55,6 +55,7 @@ function SummaryItem({ label, value, highlight = false }) {
 const YearlyReport = () => {
   const today = new Date()
   const [selectedYear, setSelectedYear] = useState(today.getFullYear())
+  const [selectedDetailMonth, setSelectedDetailMonth] = useState(1)
   const [selectedStore, setSelectedStore] = useState(ALL_STORES_OPTION)
   const [reports, setReports] = useState([])
   const [staffs, setStaffs] = useState([])
@@ -399,8 +400,46 @@ const YearlyReport = () => {
     }
   }
 
-  const summary = useMemo(() => {
+  const expenseTotalsByReport = useMemo(() => {
+    return dailyExpenses.reduce((acc, expense) => {
+      const key = `${expense.date}-${expense.store_id}`
+      acc[key] = (acc[key] || 0) + (expense.amount || 0)
+      return acc
+    }, {})
+  }, [dailyExpenses])
+
+  const filteredReports = useMemo(() => {
     if (!reports || reports.length === 0) {
+      return []
+    }
+
+    return reports.filter((report) => {
+      const expenseValue = expenseTotalsByReport[`${report.date}-${report.store_id}`] || 0
+      const hasNumbers = (report.total_sales_amount || 0) > 0
+        || (report.credit_amount || 0) > 0
+        || (report.total_groups || 0) > 0
+        || (report.total_customers || 0) > 0
+        || (report.total_shisha || 0) > 0
+        || (report.total_salary_amount || 0) > 0
+        || expenseValue > 0
+      const hasMemo = (report.memo && report.memo.trim().length > 0)
+        || (report.opinion && report.opinion.trim().length > 0)
+      return hasNumbers || hasMemo
+    })
+  }, [expenseTotalsByReport, reports])
+
+  const detailReports = useMemo(() => {
+    if (!filteredReports || filteredReports.length === 0) {
+      return []
+    }
+    return filteredReports.filter(report => {
+      const reportMonth = new Date(report.date + 'T00:00:00').getMonth() + 1
+      return reportMonth === selectedDetailMonth
+    })
+  }, [filteredReports, selectedDetailMonth])
+
+  const summary = useMemo(() => {
+    if (!filteredReports || filteredReports.length === 0) {
       return {
         totalSales: 0,
         totalCredit: 0,
@@ -414,16 +453,17 @@ const YearlyReport = () => {
       }
     }
 
-    const totals = reports.reduce(
+    const totals = filteredReports.reduce(
       (acc, report) => {
+        const expenseValue = expenseTotalsByReport[`${report.date}-${report.store_id}`] || 0
         acc.totalSales += report.total_sales_amount || 0
         acc.totalCredit += report.credit_amount || 0
-        acc.totalExpense += report.total_expense_amount || 0
+        acc.totalExpense += expenseValue
         acc.totalSalary += report.total_salary_amount || 0
         acc.totalGroups += report.total_groups || 0
         acc.totalCustomers += report.total_customers || 0
         acc.totalShisha += report.total_shisha || 0
-        acc.totalBalance += (report.total_sales_amount || 0) - ((report.total_expense_amount || 0) + (report.total_salary_amount || 0))
+        acc.totalBalance += (report.total_sales_amount || 0) - (expenseValue + (report.total_salary_amount || 0))
         acc.uniqueDates.add(report.date)
         return acc
       },
@@ -451,7 +491,7 @@ const YearlyReport = () => {
       totalBalance: totals.totalBalance,
       daysCount: totals.uniqueDates.size
     }
-  }, [reports])
+  }, [expenseTotalsByReport, filteredReports])
 
   const isAllStores = selectedStore === ALL_STORES_OPTION
 
@@ -510,6 +550,21 @@ const YearlyReport = () => {
       store: selectedStore
     }))
   }, [isAllStores, manualAggregatedByStore, selectedStore])
+
+  const groupedManualExpenses = useMemo(() => {
+    const map = {}
+    STORES.forEach(store => {
+      ;(manualAggregatedByStore[store] || []).forEach(item => {
+        const name = item.name?.trim() || '未分類'
+        if (!map[name]) {
+          map[name] = { name }
+        }
+        map[name][store] = (map[name][store] || 0) + (Number(item.amount) || 0)
+      })
+    })
+
+    return Object.values(map).sort((a, b) => a.name.localeCompare(b.name, 'ja'))
+  }, [manualAggregatedByStore])
 
   const manualExpenseTotal = useMemo(() => {
     return manualExpenseEntries.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
@@ -603,6 +658,7 @@ const YearlyReport = () => {
   }, [summary, isAllStores, selectedStore])
 
   const years = useMemo(() => Array.from({ length: 7 }, (_, i) => today.getFullYear() - i), [today])
+  const months = Array.from({ length: 12 }, (_, i) => i + 1)
 
   const handleQuickSelect = (type) => {
     switch (type) {
@@ -772,12 +828,12 @@ const YearlyReport = () => {
           <div className="grid grid-cols-1 gap-4">
             {isAllStores ? (
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse overflow-hidden rounded-lg">
+                <table className="w-full table-fixed border-collapse overflow-hidden rounded-lg">
                   <thead>
                     <tr style={{ backgroundColor: 'var(--accent)', color: 'var(--header-bg)' }}>
-                      <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200">項目</th>
+                      <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 w-32">項目</th>
                       {STORES.map(store => (
-                        <th key={`fixed-head-${store}`} className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200">{store}</th>
+                        <th key={`fixed-head-${store}`} className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 w-1/3">{store}</th>
                       ))}
                     </tr>
                   </thead>
@@ -786,9 +842,9 @@ const YearlyReport = () => {
                       const perStore = STORES.map(store => Number(fixedTotalsByStore[store][field.key]) || 0)
                       return (
                         <tr key={`fixed-row-${field.key}`} className="border-b border-gray-200">
-                          <td className="px-3 py-2 text-sm font-semibold text-gray-900 border-r border-gray-200 text-center">{field.label}</td>
+                          <td className="px-3 py-2 text-sm font-semibold text-gray-900 border-r border-gray-200 text-center w-32">{field.label}</td>
                           {perStore.map((amount, idx) => (
-                            <td key={`${field.key}-${STORES[idx]}`} className="px-3 py-2 text-sm text-gray-700 border-r border-gray-200 text-right">
+                            <td key={`${field.key}-${STORES[idx]}`} className="px-3 py-2 text-sm text-gray-700 border-r border-gray-200 text-right w-1/3">
                               <ValueWithUnit value={amount} unit="円" />
                             </td>
                           ))}
@@ -810,30 +866,32 @@ const YearlyReport = () => {
             )}
           </div>
 
-          {manualExpenseEntries.length > 0 && (
-            <div className="space-y-3">
-              {manualExpenseEntries.map(expense => (
-                <div key={`${expense.store}-${expense.name}`} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                  {isAllStores && (
-                    <div className="md:col-span-3">
-                      <span className="block text-sm font-medium text-gray-500">店舗</span>
-                      <span className="text-sm text-gray-900 font-semibold">{expense.store}</span>
-                    </div>
-                  )}
-                  <div className={isAllStores ? 'md:col-span-4' : 'md:col-span-6'}>
-                    <span className="block text-sm font-medium text-gray-500">項目</span>
-                    <span className="text-sm text-gray-900 font-semibold">{expense.name}</span>
-                  </div>
-                  <div className={isAllStores ? 'md:col-span-3' : 'md:col-span-3'}>
-                    <span className="block text-sm font-medium text-gray-500">金額</span>
-                    <ValueWithUnit value={Number(expense.amount) || 0} unit="円" valueClassName="text-sm text-gray-900 font-semibold" />
-                  </div>
-                  <div className={isAllStores ? 'md:col-span-2' : 'md:col-span-3'}>
-                    <span className="block text-sm font-medium text-gray-500">備考</span>
-                    <span className="text-sm text-gray-700">{expense.notes || '-'}</span>
-                  </div>
-                </div>
-              ))}
+          {groupedManualExpenses.length === 0 ? (
+            <p className="text-center text-gray-500 py-4">対象期間の経費データはありません。</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full table-fixed border-collapse overflow-hidden rounded-lg">
+                <thead>
+                  <tr style={{ backgroundColor: 'var(--accent)', color: 'var(--header-bg)' }}>
+                    <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 w-32">項目</th>
+                    {STORES.map(store => (
+                      <th key={`manual-head-${store}`} className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 w-1/3">{store}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {groupedManualExpenses.map(item => (
+                    <tr key={`manual-row-${item.name}`} className="border-b border-gray-200">
+                      <td className="px-3 py-2 text-sm font-semibold text-gray-900 border-r border-gray-200 text-center w-32">{item.name}</td>
+                      {STORES.map(store => (
+                        <td key={`${item.name}-${store}`} className="px-3 py-2 text-sm text-gray-700 border-r border-gray-200 text-right w-1/3">
+                          <ValueWithUnit value={Number(item[store]) || 0} unit="円" />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
 
@@ -895,19 +953,31 @@ const YearlyReport = () => {
           >
             <h3 className="text-lg font-semibold text-accent">日別内訳</h3>
           </div>
-          <div className="p-4">
+          <div className="p-4 space-y-4">
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-gray-700">表示月</label>
+              <select
+                value={selectedDetailMonth}
+                onChange={(e) => setSelectedDetailMonth(parseInt(e.target.value))}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-bar-accent"
+              >
+                {months.map(month => (
+                  <option key={`detail-month-${month}`} value={month}>{month}月</option>
+                ))}
+              </select>
+            </div>
             {isLoading ? (
               <p className="text-center text-gray-500 py-4">読み込み中...</p>
             ) : error ? (
               <p className="text-center text-red-500 py-4">{error}</p>
-            ) : reports.length === 0 ? (
+            ) : detailReports.length === 0 ? (
               <p className="text-center text-gray-500 py-4">データがありません</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[960px] border-collapse overflow-hidden rounded-lg">
                   <thead>
                     <tr style={{ backgroundColor: 'var(--accent)', color: 'var(--header-bg)' }}>
-                      <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200">日付</th>
+                      <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 w-20 whitespace-nowrap">日付</th>
                       <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">組数</th>
                       <th className="px-3 py-2 text-center text-sm font-semibold border-r border-yellow-200 whitespace-nowrap">人数</th>
                       {selectedStore === 'TEPPEN' ? null : (
@@ -936,7 +1006,7 @@ const YearlyReport = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {reports.map((report, index) => {
+                    {detailReports.map((report, index) => {
                       const key = `${report.date}-${report.store_id}`
                       const dayStaffSummary = dailyStaffSummaries[key] || {}
                       const dateLabel = format(new Date(report.date + 'T00:00:00'), 'M/d(E)', { locale: ja })
@@ -954,7 +1024,7 @@ const YearlyReport = () => {
                         key={`${report.date}-${report.store_id}-${index}`}
                         className={`border-b border-gray-200 ${index % 2 === 0 ? 'bg-surface' : 'bg-surface-alt'}`}
                       >
-                          <td className="px-3 py-2 text-sm text-gray-900 border-r border-gray-200">{dateLabel}</td>
+                          <td className="px-3 py-2 text-sm text-gray-900 border-r border-gray-200 w-20 whitespace-nowrap">{dateLabel}</td>
                           <td className="px-3 py-2 text-sm text-gray-700 text-right border-r border-gray-200">
                             <ValueWithUnit value={groupsValue} unit="組" />
                           </td>
@@ -969,7 +1039,7 @@ const YearlyReport = () => {
                           <td className="px-3 py-2 text-sm text-gray-700 text-right border-r border-gray-200">
                             <ValueWithUnit value={salesValue} unit="円" />
                           </td>
-                          <td className="px-3 py-2 text-sm text-gray-700 text-right border-r border-yellow-200">
+                          <td className="px-3 py-2 text-sm text-gray-700 text-right border-r border-gray-200">
                             <ValueWithUnit value={creditValue} unit="円" />
                           </td>
                           <td className="px-3 py-2 text-sm text-gray-700 text-right border-r border-gray-200">

@@ -507,6 +507,76 @@ const DailyReport = () => {
       if (error) throw error
 
       setSavedExpensesDisplay((prev) => prev.filter((item) => item.id !== expense.id))
+
+      const { data: remainingResults, error: resultsError } = await supabase
+        .from('staff_daily_results')
+        .select('*')
+        .eq('date', selectedDate)
+        .eq('store_id', selectedStore)
+
+      if (resultsError) {
+        console.error('Error loading staff results for summary:', resultsError)
+      }
+
+      const totalSales = (remainingResults || []).reduce((sum, result) => sum + (result.sales_amount || 0), 0)
+      const totalCredit = (remainingResults || []).reduce((sum, result) => sum + (result.credit_amount || 0), 0)
+      const totalSalary = (remainingResults || []).reduce((sum, result) => sum + (result.base_salary || 0), 0)
+      const totalGroups = (remainingResults || []).reduce((sum, result) => sum + (Number(result.groups) || 0), 0)
+      const totalCustomers = (remainingResults || []).reduce((sum, result) => sum + (Number(result.customers) || 0), 0)
+      const totalShisha = (remainingResults || []).reduce((sum, result) => sum + (result.shisha_count || 0), 0)
+
+      const { data: expenseData } = await supabase
+        .from('expenses')
+        .select('amount')
+        .eq('date', selectedDate)
+        .eq('store_id', selectedStore)
+
+      const totalExpenseAmount = (expenseData || []).reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0)
+
+      const { data: existingReport } = await supabase
+        .from('daily_reports')
+        .select('opinion, memo')
+        .eq('date', selectedDate)
+        .eq('store_id', selectedStore)
+        .maybeSingle()
+
+      const hasNoData = totalSales === 0 && totalCredit === 0 && totalSalary === 0 &&
+        totalGroups === 0 && totalCustomers === 0 && totalShisha === 0 &&
+        totalExpenseAmount === 0 && !existingReport?.opinion && !existingReport?.memo
+
+      if (hasNoData) {
+        const { error: deleteReportError } = await supabase
+          .from('daily_reports')
+          .delete()
+          .eq('date', selectedDate)
+          .eq('store_id', selectedStore)
+
+        if (deleteReportError) {
+          console.error('Error deleting empty daily report:', deleteReportError)
+        }
+      } else {
+        const { error: reportError } = await supabase
+          .from('daily_reports')
+          .upsert({
+            date: selectedDate,
+            store_id: selectedStore,
+            total_sales_amount: totalSales,
+            credit_amount: totalCredit,
+            total_groups: totalGroups,
+            total_customers: totalCustomers,
+            total_shisha: totalShisha,
+            total_salary_amount: totalSalary,
+            total_expense_amount: totalExpenseAmount,
+            memo: existingReport?.memo || '',
+            opinion: existingReport?.opinion || ''
+          }, {
+            onConflict: 'date,store_id'
+          })
+
+        if (reportError) {
+          console.error('Error updating daily report after expense delete:', reportError)
+        }
+      }
     } catch (error) {
       console.error('Error deleting expense:', error)
       setStatusMessage('経費の削除エラー')

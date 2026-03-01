@@ -408,8 +408,36 @@ const MonthlyReport = () => {
     }
   }
 
-  const summary = useMemo(() => {
+  const expenseTotalsByReport = useMemo(() => {
+    return dailyExpenses.reduce((acc, expense) => {
+      const key = `${expense.date}-${expense.store_id}`
+      acc[key] = (acc[key] || 0) + (expense.amount || 0)
+      return acc
+    }, {})
+  }, [dailyExpenses])
+
+  const filteredReports = useMemo(() => {
     if (!reports || reports.length === 0) {
+      return []
+    }
+
+    return reports.filter((report) => {
+      const expenseValue = expenseTotalsByReport[`${report.date}-${report.store_id}`] || 0
+      const hasNumbers = (report.total_sales_amount || 0) > 0
+        || (report.credit_amount || 0) > 0
+        || (report.total_groups || 0) > 0
+        || (report.total_customers || 0) > 0
+        || (report.total_shisha || 0) > 0
+        || (report.total_salary_amount || 0) > 0
+        || expenseValue > 0
+      const hasMemo = (report.memo && report.memo.trim().length > 0)
+        || (report.opinion && report.opinion.trim().length > 0)
+      return hasNumbers || hasMemo
+    })
+  }, [expenseTotalsByReport, reports])
+
+  const summary = useMemo(() => {
+    if (!filteredReports || filteredReports.length === 0) {
       return {
         totalSales: 0,
         totalCredit: 0,
@@ -423,16 +451,17 @@ const MonthlyReport = () => {
       }
     }
 
-    const totals = reports.reduce(
+    const totals = filteredReports.reduce(
       (acc, report) => {
+        const expenseValue = expenseTotalsByReport[`${report.date}-${report.store_id}`] || 0
         acc.totalSales += report.total_sales_amount || 0
         acc.totalCredit += report.credit_amount || 0
-        acc.totalExpense += report.total_expense_amount || 0
+        acc.totalExpense += expenseValue
         acc.totalSalary += report.total_salary_amount || 0
         acc.totalGroups += report.total_groups || 0
         acc.totalCustomers += report.total_customers || 0
         acc.totalShisha += report.total_shisha || 0
-        acc.totalBalance += (report.total_sales_amount || 0) - ((report.total_expense_amount || 0) + (report.total_salary_amount || 0))
+        acc.totalBalance += (report.total_sales_amount || 0) - (expenseValue + (report.total_salary_amount || 0))
         acc.uniqueDates.add(report.date)
         return acc
       },
@@ -460,7 +489,7 @@ const MonthlyReport = () => {
       totalBalance: totals.totalBalance,
       daysCount: totals.uniqueDates.size
     }
-  }, [reports])
+  }, [expenseTotalsByReport, filteredReports])
 
   const isAllStores = selectedStore === ALL_STORES_OPTION
 
@@ -612,22 +641,23 @@ const MonthlyReport = () => {
   }, [summary, selectedStore, isAllStores])
 
   const dailySalesBalances = useMemo(() => {
-    if (!reports || reports.length === 0) {
+    if (!filteredReports || filteredReports.length === 0) {
       return {}
     }
 
-    return reports.reduce((acc, report) => {
+    return filteredReports.reduce((acc, report) => {
       const dateKey = report.date
+      const expenseValue = expenseTotalsByReport[`${report.date}-${report.store_id}`] || 0
       if (!acc[dateKey]) {
         acc[dateKey] = { sales: 0, expense: 0, salary: 0, balance: 0 }
       }
       acc[dateKey].sales += report.total_sales_amount || 0
-      acc[dateKey].expense += report.total_expense_amount || 0
+      acc[dateKey].expense += expenseValue
       acc[dateKey].salary += report.total_salary_amount || 0
       acc[dateKey].balance = acc[dateKey].sales - (acc[dateKey].expense + acc[dateKey].salary)
       return acc
     }, {})
-  }, [reports])
+  }, [expenseTotalsByReport, filteredReports])
 
   const calendarWeeks = useMemo(() => {
     const monthStart = startOfMonth(new Date(selectedYear, selectedMonth - 1, 1))
@@ -1209,7 +1239,7 @@ const MonthlyReport = () => {
               <p className="text-center text-gray-500 py-4">読み込み中...</p>
             ) : error ? (
               <p className="text-center text-red-500 py-4">{error}</p>
-            ) : reports.length === 0 ? (
+            ) : filteredReports.length === 0 ? (
               <p className="text-center text-gray-500 py-4">データがありません</p>
             ) : (
               <div className="overflow-x-auto">
@@ -1246,7 +1276,7 @@ const MonthlyReport = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {reports.map((report, index) => {
+                    {filteredReports.map((report, index) => {
                       const key = `${report.date}-${report.store_id}`
                       const dayStaffSummary = dailyStaffSummaries[key] || {}
                       const dateLabel = format(new Date(report.date + 'T00:00:00'), 'M/d(E)', { locale: ja })
