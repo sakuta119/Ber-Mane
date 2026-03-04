@@ -31,7 +31,7 @@ const SalaryInput = ({ data, onChange, store, salesAmount, calculatedSalary, pai
             onBlur={onBlur}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-bar-accent"
           >
-            <option value="">選択してください</option>
+            <option value="">スタッフを選択してください</option>
             {staffs
               .filter(staff => !staff.store_ids || staff.store_ids.length === 0 || staff.store_ids.includes(store))
               .map(staff => (

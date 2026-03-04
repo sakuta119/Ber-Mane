@@ -4,7 +4,7 @@ import ja from 'date-fns/locale/ja'
 import { supabase } from '../lib/supabase'
 import StaffResultsTable from '../components/daily/StaffResultsTable'
 import ValueWithUnit from '../components/common/ValueWithUnit'
-import { buildExpenseTotalsByDateStore, filterReportsWithData, summarizeReports, aggregateStaffResultsByStaffId, aggregateStaffResultsByDateStore } from '../lib/reportUtils'
+import { buildExpenseTotalsByDateStore, filterReportsWithData, summarizeReports, aggregateStaffResultsByStaffId, aggregateStaffResultsByDateStore, mergeReportsWithStaffSummaries } from '../lib/reportUtils'
 
 const STORES = ['TEPPEN', '201', '202']
 const ALL_STORES_OPTION = 'ALL'
@@ -349,7 +349,8 @@ const MonthlyReport = () => {
 
   const expenseTotalsByReport = useMemo(() => buildExpenseTotalsByDateStore(dailyExpenses), [dailyExpenses])
   const filteredReports = useMemo(() => filterReportsWithData(reports, expenseTotalsByReport), [expenseTotalsByReport, reports])
-  const summary = useMemo(() => summarizeReports(filteredReports, expenseTotalsByReport), [expenseTotalsByReport, filteredReports])
+  const effectiveReports = useMemo(() => mergeReportsWithStaffSummaries(filteredReports, dailyStaffSummaries, expenseTotalsByReport, selectedStore, ALL_STORES_OPTION), [filteredReports, dailyStaffSummaries, expenseTotalsByReport, selectedStore])
+  const summary = useMemo(() => summarizeReports(effectiveReports, expenseTotalsByReport), [expenseTotalsByReport, effectiveReports])
 
   const isAllStores = selectedStore === ALL_STORES_OPTION
 
@@ -501,11 +502,11 @@ const MonthlyReport = () => {
   }, [summary, selectedStore, isAllStores])
 
   const dailySalesBalances = useMemo(() => {
-    if (!filteredReports || filteredReports.length === 0) {
+    if (!effectiveReports || effectiveReports.length === 0) {
       return {}
     }
 
-    return filteredReports.reduce((acc, report) => {
+    return effectiveReports.reduce((acc, report) => {
       const dateKey = report.date
       const expenseValue = expenseTotalsByReport[`${report.date}-${report.store_id}`] || 0
       if (!acc[dateKey]) {
@@ -517,7 +518,7 @@ const MonthlyReport = () => {
       acc[dateKey].balance = acc[dateKey].sales - (acc[dateKey].expense + acc[dateKey].salary)
       return acc
     }, {})
-  }, [expenseTotalsByReport, filteredReports])
+  }, [expenseTotalsByReport, effectiveReports])
 
   const calendarWeeks = useMemo(() => {
     const monthStart = startOfMonth(new Date(selectedYear, selectedMonth - 1, 1))
@@ -1099,7 +1100,7 @@ const MonthlyReport = () => {
               <p className="text-center text-gray-500 py-4">読み込み中...</p>
             ) : error ? (
               <p className="text-center text-red-500 py-4">{error}</p>
-            ) : filteredReports.length === 0 ? (
+            ) : effectiveReports.length === 0 ? (
               <p className="text-center text-gray-500 py-4">データがありません</p>
             ) : (
               <div className="overflow-x-auto">
@@ -1136,7 +1137,7 @@ const MonthlyReport = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredReports.map((report, index) => {
+                    {effectiveReports.map((report, index) => {
                       const key = `${report.date}-${report.store_id}`
                       const dayStaffSummary = dailyStaffSummaries[key] || {}
                       const dateLabel = format(new Date(report.date + 'T00:00:00'), 'M/d(E)', { locale: ja })

@@ -59,10 +59,14 @@ const DailyReport = () => {
     loadStaffResults()
   }, [selectedDate, selectedStore])
 
-  // スタッフ選択時に、そのスタッフのデータを読み込む
+  // スタッフ選択時に、そのスタッフのデータを読み込む。未選択の場合は入力欄をクリア
   useEffect(() => {
     if (selectedStaffId) {
       loadStaffData(selectedStaffId)
+    } else {
+      setSalesData({ groups: '', customers: '', salesAmount: '', creditAmount: '', shishaCount: '' })
+      setSalaryData({ baseSalary: '', champagneDeduction: '' })
+      setCombinedMemo('')
     }
   }, [selectedStaffId, selectedDate, selectedStore])
 
@@ -78,9 +82,6 @@ const DailyReport = () => {
 
       if (!error && data) {
         setStaffs(data)
-        if (data.length > 0 && !selectedStaffId) {
-          setSelectedStaffId(data[0].id)
-        }
       }
     } catch (error) {
       console.error('Error loading staffs:', error)
@@ -103,34 +104,9 @@ const DailyReport = () => {
 
       if (data) {
         setDailyReportData(data)
-        setSalesData({
-          groups: data.total_groups?.toString() || '',
-          customers: data.total_customers?.toString() || '',
-          salesAmount: data.total_sales_amount?.toString() || '',
-          creditAmount: data.credit_amount?.toString() || '',
-          shishaCount: data.total_shisha?.toString() || ''
-        })
-        setSalaryData({
-          baseSalary: data.total_salary_amount?.toString() || '',
-          champagneDeduction: ''
-        })
-        setCombinedMemo(data.memo || '')
         setOpinion(data.opinion || '')
       } else {
-        // データが存在しない場合は、すべての入力フィールドをリセット
         setDailyReportData(null)
-        setSalesData({
-          groups: '',
-          customers: '',
-          salesAmount: '',
-          creditAmount: '',
-          shishaCount: ''
-        })
-        setSalaryData({
-          baseSalary: '',
-          champagneDeduction: ''
-        })
-        setCombinedMemo('')
         setOpinion('')
       }
 
@@ -292,11 +268,14 @@ const DailyReport = () => {
     try {
       const totalSalary = calculateSalary()
       const paidSalary = calculatePaidSalary()
-      const totalSales = parseFloat(salesData.salesAmount) || 0
-      const totalCredit = parseFloat(salesData.creditAmount) || 0
-      const totalGroups = parseFloat(salesData.groups) || 0
-      const totalCustomers = parseFloat(salesData.customers) || 0
-      const totalShisha = parseFloat(salesData.shishaCount) || 0
+      // 他スタッフの実績 + 現在スタッフの入力を合計して daily_reports に反映
+      const others = staffResults.filter(r => r.staff_id !== selectedStaffId)
+      const totalSales = others.reduce((s, r) => s + (r.sales_amount || 0), 0) + (parseFloat(salesData.salesAmount) || 0)
+      const totalCredit = others.reduce((s, r) => s + (r.credit_amount || 0), 0) + (parseFloat(salesData.creditAmount) || 0)
+      const totalGroups = others.reduce((s, r) => s + (Number(r.groups) || 0), 0) + (parseFloat(salesData.groups) || 0)
+      const totalCustomers = others.reduce((s, r) => s + (Number(r.customers) || 0), 0) + (parseFloat(salesData.customers) || 0)
+      const totalShisha = others.reduce((s, r) => s + (r.shisha_count || 0), 0) + (parseFloat(salesData.shishaCount) || 0)
+      const totalSalaryAmount = others.reduce((s, r) => s + (r.base_salary || 0), 0) + totalSalary
 
       const hasStaffInput = [
         salesData.salesAmount,
@@ -386,7 +365,7 @@ const DailyReport = () => {
         return
       }
 
-      // 日報データの保存（経費を保存後の合計を反映）
+      // 日報データの保存（全スタッフの合計＋経費を反映）
       const { error: reportError } = await supabase
         .from('daily_reports')
         .upsert({
@@ -397,7 +376,7 @@ const DailyReport = () => {
           total_groups: totalGroups,
           total_customers: totalCustomers,
           total_shisha: totalShisha,
-          total_salary_amount: totalSalary,
+          total_salary_amount: totalSalaryAmount,
           total_expense_amount: fetchedExpenseTotal,
           memo: combinedMemo,
           opinion: opinion
@@ -462,6 +441,10 @@ const DailyReport = () => {
   const handleAutoSave = () => {
     if (isSaving) return
     handleSave()
+  }
+
+  const handleStaffChange = (id) => {
+    setSelectedStaffId(Number.isFinite(id) ? id : null)
   }
 
   const handleEditSavedExpense = (savedExpense) => {
@@ -677,9 +660,8 @@ const DailyReport = () => {
     }
   }
 
-  // サマリーデータを計算（保存済みの全スタッフデータから合計を計算）
+  // サマリーデータを計算（保存済みのスタッフ実績 + 選択中スタッフの未保存入力 + 経費）
   const summaryData = useMemo(() => {
-    // スタッフ実績から合計を計算
     const totalSales = staffResults.reduce((sum, result) => sum + (result.sales_amount || 0), 0)
     const totalCredit = staffResults.reduce((sum, result) => sum + (result.credit_amount || 0), 0)
     const totalSalary = staffResults.reduce((sum, result) => sum + (result.base_salary || 0), 0)
@@ -688,43 +670,40 @@ const DailyReport = () => {
     const editingExpenseTotal = expenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0)
     const savedExpenseTotal = savedExpensesDisplay.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0)
     const totalExpense = editingExpenseTotal + savedExpenseTotal
-    
-    // 現在入力中のデータも含める（まだ保存されていない場合）
-    const currentSales = parseFloat(salesData.salesAmount) || 0
-    const currentCredit = parseFloat(salesData.creditAmount) || 0
-    const currentSalary = calculateSalary()
-    const currentGroups = parseFloat(salesData.groups) || 0
-    const currentCustomers = parseFloat(salesData.customers) || 0
-    
-    // 現在入力中のスタッフのデータが既に保存されているかチェック
-    const currentStaffResult = staffResults.find(r => r.staff_id === selectedStaffId)
-    const finalTotalSales = currentStaffResult 
-      ? totalSales 
-      : totalSales + currentSales
-    const finalTotalCredit = currentStaffResult 
-      ? totalCredit 
-      : totalCredit + currentCredit
-    const finalTotalSalary = currentStaffResult 
-      ? totalSalary 
-      : totalSalary + currentSalary
-    const finalTotalGroups = currentStaffResult 
-      ? totalGroups 
-      : totalGroups + currentGroups
-    const finalTotalCustomers = currentStaffResult 
-      ? totalCustomers 
-      : totalCustomers + currentCustomers
-    
+
+    // スタッフ未選択時は保存済み実績のみ。選択中スタッフの未保存入力は加算しない
+    let finalTotalSales = totalSales
+    let finalTotalCredit = totalCredit
+    let finalTotalSalary = totalSalary
+    let finalTotalGroups = totalGroups
+    let finalTotalCustomers = totalCustomers
+
+    if (selectedStaffId) {
+      const currentStaffResult = staffResults.find(r => r.staff_id === selectedStaffId)
+      const currentSales = parseFloat(salesData.salesAmount) || 0
+      const currentCredit = parseFloat(salesData.creditAmount) || 0
+      const currentSalary = calculateSalary()
+      const currentGroups = parseFloat(salesData.groups) || 0
+      const currentCustomers = parseFloat(salesData.customers) || 0
+      if (!currentStaffResult) {
+        finalTotalSales += currentSales
+        finalTotalCredit += currentCredit
+        finalTotalSalary += currentSalary
+        finalTotalGroups += currentGroups
+        finalTotalCustomers += currentCustomers
+      }
+    }
+
     const balance = finalTotalSales - (totalExpense + finalTotalSalary)
-    
     return {
       date: selectedDate,
       totalSales: finalTotalSales,
       creditAmount: finalTotalCredit,
-      totalExpense: totalExpense,
+      totalExpense,
       totalSalary: finalTotalSalary,
       totalGroups: finalTotalGroups,
       totalCustomers: finalTotalCustomers,
-      balance: balance
+      balance
     }
   }, [
     staffResults,
@@ -838,7 +817,7 @@ const DailyReport = () => {
         store={selectedStore}
         staffs={staffs}
         selectedStaffId={selectedStaffId}
-        onStaffChange={setSelectedStaffId}
+        onStaffChange={handleStaffChange}
         onBlur={handleAutoSave}
       />
 
@@ -852,7 +831,7 @@ const DailyReport = () => {
         paidSalary={calculatePaidSalary()}
         staffs={staffs}
         selectedStaffId={selectedStaffId}
-        onStaffChange={setSelectedStaffId}
+        onStaffChange={handleStaffChange}
         onNextStaff={handleNextStaff}
         memoValue={combinedMemo}
         onMemoChange={setCombinedMemo}

@@ -4,7 +4,7 @@ import ja from 'date-fns/locale/ja'
 import { supabase } from '../lib/supabase'
 import StaffResultsTable from '../components/daily/StaffResultsTable'
 import ValueWithUnit from '../components/common/ValueWithUnit'
-import { buildExpenseTotalsByDateStore, filterReportsWithData, summarizeReports, aggregateStaffResultsByStaffId, aggregateStaffResultsByDateStore } from '../lib/reportUtils'
+import { buildExpenseTotalsByDateStore, filterReportsWithData, summarizeReports, aggregateStaffResultsByStaffId, aggregateStaffResultsByDateStore, mergeReportsWithStaffSummaries } from '../lib/reportUtils'
 
 const STORES = ['TEPPEN', '201', '202']
 const ALL_STORES_OPTION = 'ALL'
@@ -341,18 +341,19 @@ const YearlyReport = () => {
 
   const expenseTotalsByReport = useMemo(() => buildExpenseTotalsByDateStore(dailyExpenses), [dailyExpenses])
   const filteredReports = useMemo(() => filterReportsWithData(reports, expenseTotalsByReport), [expenseTotalsByReport, reports])
+  const effectiveReports = useMemo(() => mergeReportsWithStaffSummaries(filteredReports, dailyStaffSummaries, expenseTotalsByReport, selectedStore, ALL_STORES_OPTION), [filteredReports, dailyStaffSummaries, expenseTotalsByReport, selectedStore])
 
   const detailReports = useMemo(() => {
-    if (!filteredReports || filteredReports.length === 0) {
+    if (!effectiveReports || effectiveReports.length === 0) {
       return []
     }
-    return filteredReports.filter(report => {
+    return effectiveReports.filter(report => {
       const reportMonth = new Date(report.date + 'T00:00:00').getMonth() + 1
       return reportMonth === selectedDetailMonth
     })
-  }, [filteredReports, selectedDetailMonth])
+  }, [effectiveReports, selectedDetailMonth])
 
-  const summary = useMemo(() => summarizeReports(filteredReports, expenseTotalsByReport), [expenseTotalsByReport, filteredReports])
+  const summary = useMemo(() => summarizeReports(effectiveReports, expenseTotalsByReport), [expenseTotalsByReport, effectiveReports])
 
   const isAllStores = selectedStore === ALL_STORES_OPTION
 

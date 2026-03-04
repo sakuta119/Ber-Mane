@@ -6,6 +6,42 @@ export const buildExpenseTotalsByDateStore = (dailyExpenses) => (
   }, {})
 )
 
+/** daily_reports にない日付×店舗を staff 集計から補完してマージする */
+export const mergeReportsWithStaffSummaries = (filteredReports, dailyStaffSummaries, expenseTotalsByReport, selectedStore, allStoresOption) => {
+  const reportKeys = new Set((filteredReports || []).map(r => `${r.date}-${r.store_id}`))
+  const synthetic = []
+  if (dailyStaffSummaries && typeof dailyStaffSummaries === 'object') {
+    for (const key of Object.keys(dailyStaffSummaries)) {
+      if (reportKeys.has(key)) continue
+      const s = dailyStaffSummaries[key]
+      if (!s) continue
+      const storeId = s.store_id
+      if (selectedStore !== allStoresOption && storeId !== selectedStore) continue
+      const hasNumbers = (s.sales_amount || 0) > 0 || (s.credit_amount || 0) > 0 ||
+        (s.groups || 0) > 0 || (s.customers || 0) > 0 || (s.shisha_count || 0) > 0 ||
+        (s.base_salary || 0) > 0
+      if (!hasNumbers) continue
+      synthetic.push({
+        date: s.date,
+        store_id: storeId,
+        total_sales_amount: s.sales_amount || 0,
+        credit_amount: s.credit_amount || 0,
+        total_groups: s.groups || 0,
+        total_customers: s.customers || 0,
+        total_shisha: s.shisha_count || 0,
+        total_salary_amount: (s.base_salary || 0),
+        total_expense_amount: expenseTotalsByReport?.[key] || 0,
+        memo: '',
+        opinion: ''
+      })
+    }
+  }
+  return [...(filteredReports || []), ...synthetic].sort((a, b) => {
+    const d = a.date.localeCompare(b.date)
+    return d !== 0 ? d : (a.store_id || '').localeCompare(b.store_id || '')
+  })
+}
+
 export const filterReportsWithData = (reports, expenseTotalsByReport) => (
   (reports || []).filter((report) => {
     const expenseValue = expenseTotalsByReport?.[`${report.date}-${report.store_id}`] || 0
