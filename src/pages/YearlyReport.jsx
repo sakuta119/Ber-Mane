@@ -342,18 +342,32 @@ const YearlyReport = () => {
   const expenseTotalsByReport = useMemo(() => buildExpenseTotalsByDateStore(dailyExpenses), [dailyExpenses])
   const filteredReports = useMemo(() => filterReportsWithData(reports, expenseTotalsByReport), [expenseTotalsByReport, reports])
   const effectiveReports = useMemo(() => mergeReportsWithStaffSummaries(filteredReports, dailyStaffSummaries, expenseTotalsByReport, selectedStore, ALL_STORES_OPTION), [filteredReports, dailyStaffSummaries, expenseTotalsByReport, selectedStore])
+  // 日別内訳と一致させるため、staff_daily_results の集計を優先
+  const resolvedReports = useMemo(() => effectiveReports.map((r) => {
+    const key = `${r.date}-${r.store_id}`
+    const s = dailyStaffSummaries[key]
+    return {
+      ...r,
+      total_sales_amount: s?.sales_amount ?? r.total_sales_amount ?? 0,
+      credit_amount: s?.credit_amount ?? r.credit_amount ?? 0,
+      total_groups: s?.groups ?? r.total_groups ?? 0,
+      total_customers: s?.customers ?? r.total_customers ?? 0,
+      total_shisha: s?.shisha_count ?? r.total_shisha ?? 0,
+      total_salary_amount: s?.base_salary ?? r.total_salary_amount ?? 0
+    }
+  }), [effectiveReports, dailyStaffSummaries])
 
   const detailReports = useMemo(() => {
-    if (!effectiveReports || effectiveReports.length === 0) {
+    if (!resolvedReports || resolvedReports.length === 0) {
       return []
     }
-    return effectiveReports.filter(report => {
+    return resolvedReports.filter(report => {
       const reportMonth = new Date(report.date + 'T00:00:00').getMonth() + 1
       return reportMonth === selectedDetailMonth
     })
-  }, [effectiveReports, selectedDetailMonth])
+  }, [resolvedReports, selectedDetailMonth])
 
-  const summary = useMemo(() => summarizeReports(effectiveReports, expenseTotalsByReport), [expenseTotalsByReport, effectiveReports])
+  const summary = useMemo(() => summarizeReports(resolvedReports, expenseTotalsByReport), [expenseTotalsByReport, resolvedReports])
 
   const isAllStores = selectedStore === ALL_STORES_OPTION
 
