@@ -6,13 +6,22 @@ export const buildExpenseTotalsByDateStore = (dailyExpenses) => (
   }, {})
 )
 
-/** daily_reports にない日付×店舗を staff 集計から補完してマージする */
+/** key "YYYY-MM-DD-storeId" を date と storeId に分解 */
+const parseDateStoreKey = (key) => {
+  const parts = key.split('-')
+  if (parts.length < 4) return null
+  return { date: parts.slice(0, 3).join('-'), store_id: parts.slice(3).join('-') }
+}
+
+/** daily_reports にない日付×店舗を staff 集計・経費から補完してマージする */
 export const mergeReportsWithStaffSummaries = (filteredReports, dailyStaffSummaries, expenseTotalsByReport, selectedStore, allStoresOption) => {
   const reportKeys = new Set((filteredReports || []).map(r => `${r.date}-${r.store_id}`))
+  const addedKeys = new Set(reportKeys)
   const synthetic = []
+
   if (dailyStaffSummaries && typeof dailyStaffSummaries === 'object') {
     for (const key of Object.keys(dailyStaffSummaries)) {
-      if (reportKeys.has(key)) continue
+      if (addedKeys.has(key)) continue
       const s = dailyStaffSummaries[key]
       if (!s) continue
       const storeId = s.store_id
@@ -21,6 +30,7 @@ export const mergeReportsWithStaffSummaries = (filteredReports, dailyStaffSummar
         (s.groups || 0) > 0 || (s.customers || 0) > 0 || (s.shisha_count || 0) > 0 ||
         (s.base_salary || 0) > 0
       if (!hasNumbers) continue
+      addedKeys.add(key)
       synthetic.push({
         date: s.date,
         store_id: storeId,
@@ -36,6 +46,33 @@ export const mergeReportsWithStaffSummaries = (filteredReports, dailyStaffSummar
       })
     }
   }
+
+  if (expenseTotalsByReport && typeof expenseTotalsByReport === 'object') {
+    for (const key of Object.keys(expenseTotalsByReport)) {
+      if (addedKeys.has(key)) continue
+      const expenseValue = expenseTotalsByReport[key] || 0
+      if (expenseValue <= 0) continue
+      const parsed = parseDateStoreKey(key)
+      if (!parsed) continue
+      const { date, store_id: storeId } = parsed
+      if (selectedStore !== allStoresOption && storeId !== selectedStore) continue
+      addedKeys.add(key)
+      synthetic.push({
+        date,
+        store_id: storeId,
+        total_sales_amount: 0,
+        credit_amount: 0,
+        total_groups: 0,
+        total_customers: 0,
+        total_shisha: 0,
+        total_salary_amount: 0,
+        total_expense_amount: expenseValue,
+        memo: '',
+        opinion: ''
+      })
+    }
+  }
+
   return [...(filteredReports || []), ...synthetic].sort((a, b) => {
     const d = a.date.localeCompare(b.date)
     return d !== 0 ? d : (a.store_id || '').localeCompare(b.store_id || '')
