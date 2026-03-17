@@ -499,12 +499,22 @@ const YearlyReport = () => {
         value: (
           <div className="flex flex-col items-end text-right space-y-1">
             <ValueWithUnit
-              value={summary.totalExpense + summary.totalSalary}
+              value={totalExpenseAmount + summary.totalSalary}
               unit="円"
               valueClassName="text-sm font-semibold text-gray-900"
               unitClassName="text-[10px] text-gray-500"
               align="right"
             />
+            <div className="flex items-center gap-1 text-xs text-gray-500">
+              <span>内経費額</span>
+              <ValueWithUnit
+                value={totalExpenseAmount}
+                unit="円"
+                valueClassName="text-xs text-gray-500 font-medium"
+                unitClassName="text-[10px] text-gray-400"
+                align="right"
+              />
+            </div>
             <div className="flex items-center gap-1 text-xs text-gray-500">
               <span>内人件費額</span>
               <ValueWithUnit
@@ -522,16 +532,16 @@ const YearlyReport = () => {
         label: '収支合計',
         value: (
           <ValueWithUnit
-            value={summary.totalBalance}
+            value={summary.totalSales - (totalExpenseAmount + summary.totalSalary)}
             unit="円"
             showSign
-            valueClassName={summary.totalBalance >= 0 ? 'text-accent' : 'text-red-600'}
+            valueClassName={(summary.totalSales - (totalExpenseAmount + summary.totalSalary)) >= 0 ? 'text-accent' : 'text-red-600'}
           />
         ),
         highlight: true
       }
     ]
-  }, [summary, isAllStores, selectedStore])
+  }, [summary, isAllStores, selectedStore, totalExpenseAmount])
 
   const years = useMemo(() => Array.from({ length: 7 }, (_, i) => today.getFullYear() - i), [today])
   const months = Array.from({ length: 12 }, (_, i) => i + 1)
